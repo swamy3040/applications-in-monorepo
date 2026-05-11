@@ -1,0 +1,17 @@
+{
+  "name": "@repo/contract",
+  "version": "1.0.0",
+  "description": "",
+  "main": "./index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.30.3",
+  "dependencies": {
+    "@orpc/contract": "^1.13.13",
+    "zod": "^4.3.6"
+  }
+}

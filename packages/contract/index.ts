@@ -1,4 +1,4 @@
-import { optional, z } from "zod";
+import { z } from "zod";
 import { oc } from "@orpc/contract";
 
 export const UserSchema = z.object({

@@ -1,0 +1,13 @@
+{
+  "name": "@repo/db-expense-tracker",
+  "version": "1.0.0",
+  "main": "./index.ts",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10"
+  }
+}

@@ -17,7 +17,7 @@ export const expenses = types.pgTable("expenses", {
   amount: types.decimal("amount", { precision: 12, scale: 2 }).notNull(),
   description: types.text("description").notNull(),
   categoryId: types
-    .bigint("category_id", { mode: "number" })
+    .bigint("category_id", { mode: "number" })  
     .references(() => categories.id)
     .notNull(),
   date: types.timestamp("date").defaultNow().notNull(),

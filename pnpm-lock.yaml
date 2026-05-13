@@ -58,6 +58,79 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
+  apps/expense-tracker-app:
+    dependencies:
+      '@orpc/client':
+        specifier: ^1.13.13
+        version: 1.13.13
+      '@orpc/react-query':
+        specifier: ^1.14.3
+        version: 1.14.3(@orpc/client@1.13.13)(@tanstack/query-core@5.100.10)(@tanstack/react-query@5.100.10(react@19.2.4))(react@19.2.4)
+      '@orpc/server':
+        specifier: ^1.13.13
+        version: 1.13.13
+      '@repo/contract-expense-tracker':
+        specifier: workspace:*
+        version: link:../../packages/contract-expense-tracker
+      '@tailwindcss/vite':
+        specifier: ^4.2.2
+        version: 4.2.2(vite@8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.0)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0))
+      '@tanstack/react-query':
+        specifier: ^5.100.10
+        version: 5.100.10(react@19.2.4)
+      '@tanstack/react-query-devtools':
+        specifier: ^5.100.10
+        version: 5.100.10(@tanstack/react-query@5.100.10(react@19.2.4))(react@19.2.4)
+      react:
+        specifier: ^19.2.4
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.4(react@19.2.4)
+      tailwindcss:
+        specifier: ^4.2.2
+        version: 4.2.2
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.39.4
+        version: 9.39.4
+      '@types/node':
+        specifier: ^24.12.0
+        version: 24.12.0
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      '@vitejs/plugin-react':
+        specifier: ^6.0.1
+        version: 6.0.1(vite@8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.0)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0))
+      eslint:
+        specifier: ^9.39.4
+        version: 9.39.4(jiti@2.6.1)
+      eslint-plugin-react-hooks:
+        specifier: ^7.0.1
+        version: 7.0.1(eslint@9.39.4(jiti@2.6.1))
+      eslint-plugin-react-refresh:
+        specifier: ^0.5.2
+        version: 0.5.2(eslint@9.39.4(jiti@2.6.1))
+      globals:
+        specifier: ^17.4.0
+        version: 17.4.0
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.2
+      typescript-eslint:
+        specifier: ^8.57.0
+        version: 8.58.0(eslint@9.39.4(jiti@2.6.1))(typescript@6.0.2)
+      vite:
+        specifier: ^8.0.1
+        version: 8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.0)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)
+
   apps/my-react-app:
     dependencies:
       '@orpc/client':
@@ -161,6 +234,52 @@ importers:
       '@types/node':
         specifier: ^25.5.2
         version: 25.5.2
+      drizzle-kit:
+        specifier: ^0.31.10
+        version: 0.31.10
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+
+  apps/server-expense-tracker:
+    dependencies:
+      '@orpc/server':
+        specifier: ^1.13.13
+        version: 1.13.13
+      '@repo/contract-expense-tracker':
+        specifier: workspace:*
+        version: link:../../packages/contract-expense-tracker
+      '@repo/db-expense-tracker':
+        specifier: workspace:*
+        version: link:../../packages/db-expense-tracker
+      bcrypt:
+        specifier: ^6.0.0
+        version: 6.0.0
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+      jsonwebtoken:
+        specifier: ^9.0.3
+        version: 9.0.3
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@types/bcrypt':
+        specifier: ^6.0.0
+        version: 6.0.0
+      '@types/jsonwebtoken':
+        specifier: ^9.0.10
+        version: 9.0.10
+      '@types/node':
+        specifier: ^25.5.2
+        version: 25.6.0
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
@@ -1244,6 +1363,13 @@ packages:
   '@orpc/interop@1.13.13':
     resolution: {integrity: sha512-S8edIRA7ekD3/gHx5MrsO9CxZ0QvCaVDkVbNf42SZbLYPXuvxtdH0CYwaB1q9uQg2Jk0PBP8AquLH6WFwjMSbQ==}
 
+  '@orpc/react-query@1.14.3':
+    resolution: {integrity: sha512-I2oIU1dqoJfmpFzZDuzCAwMUFeVaM28EzWuP1qsoQK4QNVLjFap0dF5zsgaOVpwENVJEEP7MIoI8kWX8KIN8Yw==}
+    peerDependencies:
+      '@orpc/client': 1.14.3
+      '@tanstack/react-query': '>=5.80.2'
+      react: '>=18.3.0'
+
   '@orpc/server@1.13.13':
     resolution: {integrity: sha512-l3OfiaqfLiLQqamXufKiEzT8K9Zq8VHvijADV5eDJOaz6sFzK1Mg6q2D8l9wcmuyG7ga0HfMT+cf3JQsh5WDIA==}
     peerDependencies:
@@ -1257,6 +1383,14 @@ packages:
 
   '@orpc/shared@1.13.13':
     resolution: {integrity: sha512-kNpYOBjHvmgKHla6munWOaEeA0utEfAvoiZpXjiRjjt1RxTibdwQvVHgxRIBNMXfQsb+ON3Q/wDkoaUhvvSnIw==}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.9.0'
+    peerDependenciesMeta:
+      '@opentelemetry/api':
+        optional: true
+
+  '@orpc/shared@1.14.3':
+    resolution: {integrity: sha512-S7qmhZT4vchKEF6F6YduG5ub5lWnvQRVNq1/f5/kJkSnYMG5q6rWLcK7c3wYfDkeap05ZIiWTwksH+fv+yJOrw==}
     peerDependencies:
       '@opentelemetry/api': '>=1.9.0'
     peerDependenciesMeta:
@@ -1285,6 +1419,12 @@ packages:
 
   '@orpc/standard-server@1.13.13':
     resolution: {integrity: sha512-9pgS8XvauuRQElkyuD8F3om+nN0KBEnTkhblDHCBzkZERjWkmfirJmshQrWHoFaDTk+nnXHIaY6d7TBTxXdPRw==}
+
+  '@orpc/tanstack-query@1.14.3':
+    resolution: {integrity: sha512-SRoq4zCRF65vlveFegaaVHaqmlpOxI/tHL/sdKVrELJ3zPq22sS4GZQeABIdevH25wjxWBO0gKrVaazzTtVA6Q==}
+    peerDependencies:
+      '@orpc/client': 1.14.3
+      '@tanstack/query-core': '>=5.80.2'
 
   '@oxc-project/types@0.122.0':
     resolution: {integrity: sha512-oLAl5kBpV4w69UtFZ9xqcmTi+GENWOcPF7FCrczTiBbmC0ibXxCwyvZGbO39rCVEuLGAZM84DH0pUIyyv/YJzA==}
@@ -1495,6 +1635,23 @@ packages:
     resolution: {integrity: sha512-mEiF5HO1QqCLXoNEfXVA1Tzo+cYsrqV7w9Juj2wdUFyW07JRenqMG225MvPwr3ZD9N1bFQj46X7r33iHxLUW0w==}
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  '@tanstack/query-core@5.100.10':
+    resolution: {integrity: sha512-8UR0yJR+GiQ40m3lPhUr0xbfAupe6GSQiksSBSa9SM2NjezFyxXCIA69/lz8cSoNKZLrw1/PktIyQBJcVeMi3w==}
+
+  '@tanstack/query-devtools@5.100.10':
+    resolution: {integrity: sha512-3DmJf25hDPus5IpVvp6ujXv6bKV2zPzI9vpbAmpJigsL/H6DPvPjmf7/Q9yVKEke//8fgeQ45abjgnLuyYxAiw==}
+
+  '@tanstack/react-query-devtools@5.100.10':
+    resolution: {integrity: sha512-zes0+o9ef5rAZXJ9f/SeaLs2nufJaeVkZkl/Or9NGrWVF41kL9Od9ED9nCwtQlgiF2VGtrzhEw5AU/igAO+aAg==}
+    peerDependencies:
+      '@tanstack/react-query': ^5.100.10
+      react: ^18 || ^19
+
+  '@tanstack/react-query@5.100.10':
+    resolution: {integrity: sha512-FLaZf2RCrA/Zgp4aiu5tG3TyasTRO7aZ99skxQpr3Hg/zXOhu6yq5FZCYQ/tRaJtM9ylnoK8tFK7PolXQadv6Q==}
+    peerDependencies:
+      react: ^18 || ^19
 
   '@tootallnate/quickjs-emscripten@0.23.0':
     resolution: {integrity: sha512-C5Mc6rdnsaJDjO3UpGW/CQTHtCKaYlScZTly4JIu97Jxo/odCiH0ITnDXSJPTOrEKk/ycSZ0AOgTmkDtkOsvIA==}
@@ -5046,6 +5203,17 @@ snapshots:
 
   '@orpc/interop@1.13.13': {}
 
+  '@orpc/react-query@1.14.3(@orpc/client@1.13.13)(@tanstack/query-core@5.100.10)(@tanstack/react-query@5.100.10(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@orpc/client': 1.13.13
+      '@orpc/shared': 1.14.3
+      '@orpc/tanstack-query': 1.14.3(@orpc/client@1.13.13)(@tanstack/query-core@5.100.10)
+      '@tanstack/react-query': 5.100.10(react@19.2.4)
+      react: 19.2.4
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+      - '@tanstack/query-core'
+
   '@orpc/server@1.13.13':
     dependencies:
       '@orpc/client': 1.13.13
@@ -5064,6 +5232,11 @@ snapshots:
       - fastify
 
   '@orpc/shared@1.13.13':
+    dependencies:
+      radash: 12.1.1
+      type-fest: 5.5.0
+
+  '@orpc/shared@1.14.3':
     dependencies:
       radash: 12.1.1
       type-fest: 5.5.0
@@ -5110,6 +5283,14 @@ snapshots:
   '@orpc/standard-server@1.13.13':
     dependencies:
       '@orpc/shared': 1.13.13
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+
+  '@orpc/tanstack-query@1.14.3(@orpc/client@1.13.13)(@tanstack/query-core@5.100.10)':
+    dependencies:
+      '@orpc/client': 1.13.13
+      '@orpc/shared': 1.14.3
+      '@tanstack/query-core': 5.100.10
     transitivePeerDependencies:
       - '@opentelemetry/api'
 
@@ -5247,6 +5428,21 @@ snapshots:
       tailwindcss: 4.2.2
       vite: 8.0.3(@emnapi/core@1.9.1)(@emnapi/runtime@1.9.1)(@types/node@24.12.0)(esbuild@0.27.7)(jiti@2.6.1)(tsx@4.21.0)
 
+  '@tanstack/query-core@5.100.10': {}
+
+  '@tanstack/query-devtools@5.100.10': {}
+
+  '@tanstack/react-query-devtools@5.100.10(@tanstack/react-query@5.100.10(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@tanstack/query-devtools': 5.100.10
+      '@tanstack/react-query': 5.100.10(react@19.2.4)
+      react: 19.2.4
+
+  '@tanstack/react-query@5.100.10(react@19.2.4)':
+    dependencies:
+      '@tanstack/query-core': 5.100.10
+      react: 19.2.4
+
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
   '@tsconfig/node10@1.0.12': {}
@@ -5319,7 +5515,7 @@ snapshots:
 
   '@types/bcrypt@6.0.0':
     dependencies:
-      '@types/node': 25.5.2
+      '@types/node': 25.6.0
 
   '@types/eslint@8.56.12':
     dependencies:
@@ -5331,7 +5527,7 @@ snapshots:
   '@types/glob@7.2.0':
     dependencies:
       '@types/minimatch': 6.0.0
-      '@types/node': 25.5.2
+      '@types/node': 25.6.0
 
   '@types/inquirer@6.5.0':
     dependencies:
@@ -5345,11 +5541,11 @@ snapshots:
   '@types/jsonwebtoken@9.0.10':
     dependencies:
       '@types/ms': 2.1.0
-      '@types/node': 25.5.2
+      '@types/node': 25.6.0
 
   '@types/minimatch@6.0.0':
     dependencies:
-      minimatch: 9.0.9
+      minimatch: 10.2.5
 
   '@types/ms@2.1.0': {}
 
@@ -5394,7 +5590,7 @@ snapshots:
 
   '@types/through@0.0.33':
     dependencies:
-      '@types/node': 25.5.2
+      '@types/node': 25.6.0
 
   '@types/tinycolor2@1.4.6': {}
 

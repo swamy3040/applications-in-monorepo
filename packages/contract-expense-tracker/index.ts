@@ -23,7 +23,7 @@ export const categoriesContract = oc
 export const expensesContract = oc
   .input(
     z.object({
-      amount: z.number().positive,
+      amount: z.number().positive(),
       description: z.string(),
       categoryId: z.number(),
       date: z.date().optional(),
@@ -32,8 +32,18 @@ export const expensesContract = oc
   )
   .output(expensesSchema);
 
+export const listCategoriesContract = oc
+  .input(z.void())
+  .output(z.array(categoriesSchema));
+
+export const listExpensesContract = oc
+  .input(z.void())
+  .output(z.array(expensesSchema));
+
 export const contractMethods = {
-  contrat: {
+  contract: {
+    listExpenses: listExpensesContract,
+    listCategories: listCategoriesContract,
     categories: categoriesContract,
     expenses: expensesContract,
   },

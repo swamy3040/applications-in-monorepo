@@ -6,6 +6,12 @@ import type { AppRouter } from "../../../server-expense-tracker/index";
 
 const link = new RPCLink({
   url: "http://localhost:3000/orpc",
+  fetch: (url, init) => {
+    return fetch(url, {
+      ...init,
+      credentials: "include", // 👈 THIS IS THE MISSING KEY
+    });
+  },
 });
 
 // 1. Create the base client

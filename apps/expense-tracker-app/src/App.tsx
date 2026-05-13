@@ -1,39 +1,110 @@
-import { useQuery } from "@tanstack/react-query"; // 1. Standard TanStack hook
-import { orpc } from "./lib/orpc"; // 2. Your oRPC bridge
+import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { orpc } from "./lib/orpc";
+import { UserAuth } from "./components/UserAuth";
+import { ResetPassword } from "./components/ResetPassword";
 
-const App = () => {
-  // Instead of manually writing keys and fetch functions,
-  // orpc.queryOptions() generates them for you!
-  const { data, isPending, error } = useQuery(
-    orpc.listCategories.queryOptions(),
-  );
+function App() {
+  // Track the current URL path to handle "Reset Password" routing
+  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [view, setView] = useState<"AUTH" | "WORKSPACE" | "INITIAL">("INITIAL");
 
-  if (isPending) return <div className="p-10">Connecting to Supabase...</div>;
+  // 1. The Gatekeeper Query (Checks for HttpOnly Cookie)
+  const {
+    data: user,
+    isLoading,
+    refetch,
+  } = useQuery(orpc.auth.getMe.queryOptions());
 
-  if (error)
-    return <div className="p-10 text-red-500">Error: {error.message}</div>;
+  // 2. Listen for browser URL changes
+  useEffect(() => {
+    const handleLocationChange = () => setCurrentPath(window.location.pathname);
+    window.addEventListener("popstate", handleLocationChange);
 
+    // Sync View State based on Auth Status
+    if (!isLoading) {
+      if (user) {
+        setCurrentUser(user);
+        setView("WORKSPACE");
+      } else {
+        setView("AUTH");
+      }
+    }
+
+    return () => window.removeEventListener("popstate", handleLocationChange);
+  }, [user, isLoading]);
+
+  // 3. Logout Logic
+  const handleLogout = async () => {
+    try {
+      await orpc.auth.logout.call();
+      setCurrentUser(null);
+      setView("AUTH");
+      await refetch();
+    } catch (err) {
+      setView("AUTH");
+    }
+  };
+
+  // 4. Routing Priority (Reset Screen)
+  if (currentPath === "/reset-password") {
+    return <ResetPassword />;
+  }
+
+  // 5. Loading State
+  if (view === "INITIAL" || isLoading) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-900">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-blue-400 border-t-transparent"></div>
+      </div>
+    );
+  }
+
+  // 6. Auth View
+  if (view === "AUTH") {
+    return (
+      <UserAuth
+        onLogin={async (userName, password) => {
+          await orpc.auth.login.call({ userName, password });
+          await refetch();
+        }}
+        onRegister={async (userName, email, password) => {
+          await orpc.auth.register.call({ userName, email, password });
+        }}
+        onRequestReset={async (email) => {
+          await orpc.auth.requestPasswordReset.call({ email });
+        }}
+      />
+    );
+  }
+
+  // 7. Workspace View (Temporary Logout Test)
   return (
-    <div className="p-10 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl font-bold mb-4 text-blue-600 font-sans">
-        Expense Tracker
-      </h1>
+    <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white p-8">
+      <div className="w-full max-w-md bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-2xl text-center">
+        <p className="text-xs text-slate-500 uppercase font-bold mb-1">
+          Authenticated As
+        </p>
+        <h1 className="text-2xl font-bold text-blue-400 mb-6">
+          {currentUser?.userName}
+        </h1>
 
-      <ul className="space-y-2">
-        {data?.map((category) => (
-          <li
-            key={category.id}
-            className="p-3 bg-white shadow-sm rounded border border-gray-200"
+        <div className="flex flex-col gap-4">
+          <div className="p-4 bg-slate-900 rounded-lg border border-slate-700 text-sm text-green-400 font-mono">
+            ✓ Session Active (Port 5174)
+          </div>
+
+          <button
+            onClick={handleLogout}
+            className="w-full py-3 bg-red-600 hover:bg-red-500 rounded-lg font-bold transition-all"
           >
-            <span className="font-medium">{category.name}</span>
-            <span className="ml-2 text-xs text-gray-400 uppercase">
-              {category.type}
-            </span>
-          </li>
-        ))}
-      </ul>
+            Logout
+          </button>
+        </div>
+      </div>
     </div>
   );
-};
+}
 
 export default App;

@@ -7,8 +7,8 @@ import { appRouter } from "./index";
 const handler = new RPCHandler(appRouter, {
   plugins: [
     new CORSPlugin({
-      origin: ["http://localhost:5174"], // Your Vite Frontend port
-      credentials: true,
+      origin: ["http://localhost:5174"], // Added both common Vite ports
+      credentials: true, // 👈 CRITICAL for cookies to work!
     }),
   ],
   interceptors: [
@@ -21,6 +21,12 @@ const handler = new RPCHandler(appRouter, {
 const server = createServer(async (req, res) => {
   const result = await handler.handle(req, res, {
     prefix: "/orpc",
+    // 1. INJECT CONTEXT: This is the "Fuel" for your middleware and login cookies
+    context: {
+      req,
+      res,
+      authUser: null, // Initial state; middleware will update this
+    },
   });
 
   if (!result.matched) {
@@ -34,5 +40,6 @@ server.listen(PORT, () => {
   console.log("-----------------------------------------");
   console.log(`🚀 API RUNNING: http://localhost:${PORT}/orpc`);
   console.log(`📂 DB CONNECTED: Expense Tracker`);
+  console.log(`🔒 AUTH READY: JWT + HttpOnly Cookies`);
   console.log("-----------------------------------------");
 });

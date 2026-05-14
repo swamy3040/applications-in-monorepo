@@ -3,11 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { orpc } from "./lib/orpc";
 import { UserAuth } from "./components/UserAuth";
 import { ResetPassword } from "./components/ResetPassword";
+import { Dashboard } from "./components/Dashboard";
+import type { User } from "@repo/contract-expense-tracker";
 
 function App() {
   // Track the current URL path to handle "Reset Password" routing
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [view, setView] = useState<"AUTH" | "WORKSPACE" | "INITIAL">("INITIAL");
 
   // 1. The Gatekeeper Query (Checks for HttpOnly Cookie)
@@ -80,31 +82,7 @@ function App() {
   }
 
   // 7. Workspace View (Temporary Logout Test)
-  return (
-    <div className="flex flex-col items-center justify-center h-screen bg-slate-900 text-white p-8">
-      <div className="w-full max-w-md bg-slate-800 p-8 rounded-2xl border border-slate-700 shadow-2xl text-center">
-        <p className="text-xs text-slate-500 uppercase font-bold mb-1">
-          Authenticated As
-        </p>
-        <h1 className="text-2xl font-bold text-blue-400 mb-6">
-          {currentUser?.userName}
-        </h1>
-
-        <div className="flex flex-col gap-4">
-          <div className="p-4 bg-slate-900 rounded-lg border border-slate-700 text-sm text-green-400 font-mono">
-            ✓ Session Active (Port 5174)
-          </div>
-
-          <button
-            onClick={handleLogout}
-            className="w-full py-3 bg-red-600 hover:bg-red-500 rounded-lg font-bold transition-all"
-          >
-            Logout
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  return <Dashboard user={currentUser} onLogout={handleLogout} />;
 }
 
 export default App;

@@ -8,6 +8,8 @@ export const UserSchema = z.object({
   createdAt: z.date().or(z.string()), // Flexible for DB or JSON
 });
 
+export type User = z.infer<typeof UserSchema>;
+
 export const categoriesSchema = z.object({
   id: z.number(),
   name: z.string(),

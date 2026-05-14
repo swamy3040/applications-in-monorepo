@@ -16,6 +16,12 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* --- SHADCN PATH ALIAS CONFIG START --- */
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    /* --- SHADCN PATH ALIAS CONFIG END --- */
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,

@@ -1,5 +1,5 @@
 {
-  "name": "@repo/server",
+  "name": "@repo/server-expense-tracker",
   "version": "1.0.0",
   "description": "",
   "main": "./index.ts",

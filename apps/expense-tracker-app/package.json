@@ -15,6 +15,7 @@
     "@orpc/server": "^1.13.13",
     "@repo/contract-expense-tracker": "workspace:*",
     "@tailwindcss/vite": "^4.2.2",
+    "@tanstack/react-form": "^1.32.0",
     "@tanstack/react-query": "^5.100.10",
     "@tanstack/react-query-devtools": "^5.100.10",
     "class-variance-authority": "^0.7.1",

@@ -5,7 +5,7 @@ export const UserSchema = z.object({
   id: z.number(),
   userName: z.string(),
   email: z.string(),
-  createdAt: z.date().or(z.string()), // Flexible for DB or JSON
+  createdAt: z.date().or(z.string()),
 });
 
 export type User = z.infer<typeof UserSchema>;
@@ -27,6 +27,7 @@ export const expensesSchema = z.object({
   userId: z.number(),
 });
 
+// --- AUTH CONTRACTS ---
 export const registerContract = oc
   .input(
     z.object({
@@ -38,12 +39,7 @@ export const registerContract = oc
   .output(UserSchema);
 
 export const loginContract = oc
-  .input(
-    z.object({
-      userName: z.string(),
-      password: z.string(),
-    }),
-  )
+  .input(z.object({ userName: z.string(), password: z.string() }))
   .output(UserSchema);
 
 export const requestPasswordResetContract = oc
@@ -51,18 +47,14 @@ export const requestPasswordResetContract = oc
   .output(z.boolean());
 
 export const resetPasswordContract = oc
-  .input(
-    z.object({
-      token: z.string(),
-      newPassword: z.string().min(6),
-    }),
-  )
+  .input(z.object({ token: z.string(), newPassword: z.string().min(6) }))
   .output(z.boolean());
 
 export const getMeContract = oc.input(z.void()).output(UserSchema.nullable());
 
 export const logoutContract = oc.input(z.void()).output(z.boolean());
 
+// --- CATEGORY CONTRACTS ---
 export const createCategoryContract = oc
   .input(z.object({ name: z.string(), type: z.enum(["INCOME", "EXPENSE"]) }))
   .output(categoriesSchema);
@@ -71,6 +63,23 @@ export const listCategoriesContract = oc
   .input(z.void())
   .output(z.array(categoriesSchema));
 
+// 👇 NEW: Update Category
+export const updateCategoryContract = oc
+  .input(
+    z.object({
+      id: z.number(),
+      name: z.string().optional(),
+      type: z.enum(["INCOME", "EXPENSE"]).optional(),
+    }),
+  )
+  .output(categoriesSchema);
+
+// 👇 NEW: Delete Category
+export const deleteCategoryContract = oc
+  .input(z.object({ id: z.number() }))
+  .output(z.boolean());
+
+// --- EXPENSE CONTRACTS ---
 export const createExpenseContract = oc
   .input(
     z.object({
@@ -87,6 +96,25 @@ export const listExpensesContract = oc
   .input(z.void())
   .output(z.array(expensesSchema));
 
+// 👇 NEW: Update Expense
+export const updateExpenseContract = oc
+  .input(
+    z.object({
+      id: z.number(),
+      amount: z.number().positive().optional(),
+      description: z.string().optional(),
+      categoryId: z.number().optional(),
+      date: z.date().optional(),
+      type: z.enum(["INCOME", "EXPENSE"]).optional(),
+    }),
+  )
+  .output(expensesSchema);
+
+// 👇 NEW: Delete Expense
+export const deleteExpenseContract = oc
+  .input(z.object({ id: z.number() }))
+  .output(z.boolean());
+
 /**
  * 4. THE CONTRACT METHODS OBJECT
  */
@@ -102,9 +130,13 @@ export const contractMethods = {
   categories: {
     create: createCategoryContract,
     list: listCategoriesContract,
+    update: updateCategoryContract,
+    delete: deleteCategoryContract,
   },
   expenses: {
     create: createExpenseContract,
     list: listExpensesContract,
+    update: updateExpenseContract,
+    delete: deleteExpenseContract,
   },
 };

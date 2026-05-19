@@ -28,34 +28,24 @@ type AuthContext = {
 const implemented = implement(contractMethods).$context<AuthContext>();
 
 /**
- * AUTH MIDDLEWARE
- * Standard security gate for all protected routes
+ * AUTH MIDDLEWARE & PASSWORD RESET
  */
-
 export const requestPasswordReset =
   implemented.auth.requestPasswordReset.handler(async ({ input }) => {
     const user = await db.query.users.findFirst({
       where: eq(schema.users.email, input.email.toLowerCase()),
     });
 
-    // We return true even if user isn't found to prevent "email fishing"
-    if (!user) {
-      console.log(`❌ No user found for reset: ${input.email}`);
-      return true; // Still return true for security
-    }
+    if (!user) return true; // Still return true for security (prevent email fishing)
 
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 3600000); // 1 hour expiry
 
     await db
       .update(schema.users)
-      .set({
-        resetToken: token,
-        resetTokenExpiresAt: expiresAt,
-      })
+      .set({ resetToken: token, resetTokenExpiresAt: expiresAt })
       .where(eq(schema.users.id, user.id));
 
-    // In a real app, you'd email this. For now, we log it to the console.
     console.log("-----------------------------------------");
     console.log(`🔑 RESET LINK FOR: ${user.email}`);
     console.log(`URL: http://localhost:5174/reset-password?token=${token}`);
@@ -109,7 +99,6 @@ const authMiddleware = implemented.middleware(async ({ context, next }) => {
 });
 
 // --- AUTH HANDLERS ---
-
 export const register = implemented.auth.register.handler(async ({ input }) => {
   const hashedPassword = await bcrypt.hash(input.password, 10);
   const [newUser] = await db
@@ -168,22 +157,19 @@ export const logout = implemented.auth.logout.handler(async ({ context }) => {
   return true;
 });
 
-// --- BUSINESS HANDLERS (PROTECTED) ---
-
+// --- CATEGORY HANDLERS ---
 export const createCategory = implemented.categories.create
   .use(authMiddleware)
   .handler(async ({ input, context }) => {
     if (!context.authUser) throw new Error("Unauthorized");
-
     const [newCategory] = await db
       .insert(schema.categories)
       .values({
         name: input.name,
         type: input.type,
-        userId: context.authUser.userId, // 👈 Linked to Owner
+        userId: context.authUser.userId,
       })
       .returning();
-
     return newCategory;
   });
 
@@ -191,18 +177,55 @@ export const listCategories = implemented.categories.list
   .use(authMiddleware)
   .handler(async ({ context }) => {
     if (!context.authUser) throw new Error("Unauthorized");
-
     return await db
       .select()
       .from(schema.categories)
-      .where(eq(schema.categories.userId, context.authUser.userId)); // 👈 Only see YOURS
+      .where(eq(schema.categories.userId, context.authUser.userId));
   });
 
+export const updateCategory = implemented.categories.update
+  .use(authMiddleware)
+  .handler(async ({ input, context }) => {
+    if (!context.authUser) throw new Error("Unauthorized");
+    const [updated] = await db
+      .update(schema.categories)
+      .set({
+        ...(input.name && { name: input.name }),
+        ...(input.type && { type: input.type }),
+      })
+      .where(
+        and(
+          eq(schema.categories.id, input.id),
+          eq(schema.categories.userId, context.authUser.userId),
+        ),
+      )
+      .returning();
+    if (!updated) throw new Error("Category not found or unauthorized");
+    return updated;
+  });
+
+export const deleteCategory = implemented.categories.delete
+  .use(authMiddleware)
+  .handler(async ({ input, context }) => {
+    if (!context.authUser) throw new Error("Unauthorized");
+    const [deleted] = await db
+      .delete(schema.categories)
+      .where(
+        and(
+          eq(schema.categories.id, input.id),
+          eq(schema.categories.userId, context.authUser.userId),
+        ),
+      )
+      .returning();
+    if (!deleted) throw new Error("Category not found or unauthorized");
+    return true;
+  });
+
+// --- EXPENSE HANDLERS ---
 export const createExpense = implemented.expenses.create
   .use(authMiddleware)
   .handler(async ({ input, context }) => {
     if (!context.authUser) throw new Error("Unauthorized");
-
     const [newExpense] = await db
       .insert(schema.expenses)
       .values({
@@ -210,11 +233,10 @@ export const createExpense = implemented.expenses.create
         description: input.description,
         categoryId: input.categoryId,
         type: input.type,
-        userId: context.authUser.userId, // 👈 Linked to Owner
+        userId: context.authUser.userId,
         date: input.date ? new Date(input.date) : new Date(),
       })
       .returning();
-
     return { ...newExpense, amount: Number(newExpense.amount) };
   });
 
@@ -222,13 +244,52 @@ export const listExpenses = implemented.expenses.list
   .use(authMiddleware)
   .handler(async ({ context }) => {
     if (!context.authUser) throw new Error("Unauthorized");
-
     const result = await db
       .select()
       .from(schema.expenses)
-      .where(eq(schema.expenses.userId, context.authUser.userId)); // 👈 Privacy first
-
+      .where(eq(schema.expenses.userId, context.authUser.userId));
     return result.map((e) => ({ ...e, amount: Number(e.amount) }));
+  });
+
+export const updateExpense = implemented.expenses.update
+  .use(authMiddleware)
+  .handler(async ({ input, context }) => {
+    if (!context.authUser) throw new Error("Unauthorized");
+    const [updated] = await db
+      .update(schema.expenses)
+      .set({
+        ...(input.amount && { amount: input.amount.toString() }),
+        ...(input.description && { description: input.description }),
+        ...(input.categoryId && { categoryId: input.categoryId }),
+        ...(input.type && { type: input.type }),
+        ...(input.date && { date: new Date(input.date) }),
+      })
+      .where(
+        and(
+          eq(schema.expenses.id, input.id),
+          eq(schema.expenses.userId, context.authUser.userId),
+        ),
+      )
+      .returning();
+    if (!updated) throw new Error("Expense not found or unauthorized");
+    return { ...updated, amount: Number(updated.amount) };
+  });
+
+export const deleteExpense = implemented.expenses.delete
+  .use(authMiddleware)
+  .handler(async ({ input, context }) => {
+    if (!context.authUser) throw new Error("Unauthorized");
+    const [deleted] = await db
+      .delete(schema.expenses)
+      .where(
+        and(
+          eq(schema.expenses.id, input.id),
+          eq(schema.expenses.userId, context.authUser.userId),
+        ),
+      )
+      .returning();
+    if (!deleted) throw new Error("Expense not found or unauthorized");
+    return true;
   });
 
 // 4. Final Router
@@ -241,8 +302,18 @@ export const appRouter = implemented.router({
     requestPasswordReset,
     resetPassword,
   },
-  categories: { create: createCategory, list: listCategories },
-  expenses: { create: createExpense, list: listExpenses },
+  categories: {
+    create: createCategory,
+    list: listCategories,
+    update: updateCategory,
+    delete: deleteCategory,
+  },
+  expenses: {
+    create: createExpense,
+    list: listExpenses,
+    update: updateExpense,
+    delete: deleteExpense,
+  },
 });
 
 export type AppRouter = typeof appRouter;

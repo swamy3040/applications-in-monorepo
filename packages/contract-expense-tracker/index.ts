@@ -60,7 +60,13 @@ export const createCategoryContract = oc
   .output(categoriesSchema);
 
 export const listCategoriesContract = oc
-  .input(z.void())
+  .input(
+    z
+      .object({
+        search: z.string().optional(),
+      })
+      .optional(),
+  )
   .output(z.array(categoriesSchema));
 
 // 👇 NEW: Update Category
@@ -93,7 +99,13 @@ export const createExpenseContract = oc
   .output(expensesSchema);
 
 export const listExpensesContract = oc
-  .input(z.void())
+  .input(
+    z
+      .object({
+        search: z.string().optional(), // 👈 Accepts an optional search query string
+      })
+      .optional(),
+  )
   .output(z.array(expensesSchema));
 
 // 👇 NEW: Update Expense

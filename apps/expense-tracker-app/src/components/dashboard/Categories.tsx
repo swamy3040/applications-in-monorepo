@@ -12,6 +12,7 @@ import {
   Edit,
   Loader2,
   FolderTree,
+  Search,
 } from "lucide-react";
 import {
   Table,
@@ -42,19 +43,26 @@ import {
   SelectValue,
 } from "../../../@/components/ui/select";
 
+interface CategoriesProps {
+  setActiveTab?: (tab: string) => void;
+}
+
 const formSchema = z.object({
   name: z.string().min(2, "Name is too short"),
   type: z.enum(["INCOME", "EXPENSE"]),
 });
 
-export function Categories() {
+export function Categories({ setActiveTab }: CategoriesProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const queryClient = useQueryClient();
 
-  // Fetch Categories
-  const categoriesOptions = orpc.categories.list.queryOptions();
-  const { data: categories, isLoading } = useQuery(categoriesOptions);
+  // 👇 1. PURE TANSTACK FLOW: Watches searchQuery inside the key array on every single keystroke
+  const { data: categories, isLoading } = useQuery({
+    queryKey: ["categories", "list", searchQuery],
+    queryFn: () => orpc.categories.list.call({ search: searchQuery }),
+  });
 
   // Mutations
   const createMutation = useMutation({
@@ -85,8 +93,9 @@ export function Categories() {
           await createMutation.mutateAsync(value);
         }
 
+        // 👇 2. CACHE SYNC: Invalidates the explicit flat array structure matching the current search state
         await queryClient.invalidateQueries({
-          queryKey: categoriesOptions.queryKey,
+          queryKey: ["categories", "list", searchQuery],
         });
         closeModal();
       } catch (err) {
@@ -111,23 +120,39 @@ export function Categories() {
   const onDeleteClick = async (id: number) => {
     if (!confirm("Are you sure you want to delete this category?")) return;
     await deleteMutation.mutateAsync(id);
-    queryClient.invalidateQueries({ queryKey: categoriesOptions.queryKey });
+
+    // 👇 3. CACHE SYNC: Ensures the deleted item disappears correctly while filtered
+    await queryClient.invalidateQueries({
+      queryKey: ["categories", "list", searchQuery],
+    });
   };
 
   return (
     <div className="space-y-6 text-white">
-      {/* Header & Add Button */}
-      <div className="flex justify-between items-center gap-4">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-blue-500/10 rounded-lg">
-            <FolderTree className="size-6 text-blue-500" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">Categories</h2>
-            <p className="text-slate-400 text-sm">
-              Manage your income and expense groupings.
-            </p>
-          </div>
+      {/* Header Info Banner */}
+      <div className="flex items-center gap-2">
+        <div className="p-2 bg-blue-500/10 rounded-lg">
+          <FolderTree className="size-6 text-blue-500" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight">Categories</h2>
+          <p className="text-slate-400 text-sm">
+            Manage your income and expense groupings.
+          </p>
+        </div>
+      </div>
+
+      {/* 👇 LAYOUT SEPARATION: Extended full-width search input bar row layout */}
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+          <Input
+            type="text"
+            placeholder="Search categories..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 bg-slate-900 border-slate-800 text-white placeholder:text-slate-500 w-full focus-visible:ring-blue-600"
+          />
         </div>
 
         <Dialog
@@ -136,7 +161,7 @@ export function Categories() {
         >
           <DialogTrigger asChild>
             <Button
-              className="bg-blue-600 hover:bg-blue-500 font-bold"
+              className="bg-blue-600 hover:bg-blue-500 font-bold whitespace-nowrap"
               onClick={() => setIsModalOpen(true)}
             >
               <Plus className="mr-2 size-4" /> Add Category

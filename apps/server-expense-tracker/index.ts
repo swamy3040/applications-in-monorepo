@@ -3,7 +3,7 @@ import { config } from "dotenv";
 import path from "path";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, like } from "drizzle-orm";
 import { contractMethods } from "@repo/contract-expense-tracker";
 import * as schema from "@repo/db-expense-tracker";
 import crypto from "crypto";
@@ -175,12 +175,21 @@ export const createCategory = implemented.categories.create
 
 export const listCategories = implemented.categories.list
   .use(authMiddleware)
-  .handler(async ({ context }) => {
+  .handler(async ({ context, input }) => {
     if (!context.authUser) throw new Error("Unauthorized");
+    const conditions = [eq(schema.categories.userId, context.authUser.userId)];
+    if (input?.search) {
+      conditions.push(
+        like(
+          sql`lower(${schema.categories.name})`,
+          `%${input.search.toLowerCase()}%`,
+        ),
+      );
+    }
     return await db
       .select()
       .from(schema.categories)
-      .where(eq(schema.categories.userId, context.authUser.userId));
+      .where(and(...conditions));
   });
 
 export const updateCategory = implemented.categories.update
@@ -242,12 +251,24 @@ export const createExpense = implemented.expenses.create
 
 export const listExpenses = implemented.expenses.list
   .use(authMiddleware)
-  .handler(async ({ context }) => {
+  .handler(async ({ context, input }) => {
     if (!context.authUser) throw new Error("Unauthorized");
+    // 1. 👇 Set up user ownership filter
+    const conditions = [eq(schema.expenses.userId, context.authUser.userId)];
+
+    // 2. 👇 If searching, compare description strings securely
+    if (input?.search) {
+      conditions.push(
+        like(
+          sql`lower(${schema.expenses.description})`,
+          `%${input.search.toLowerCase()}%`,
+        ),
+      );
+    }
     const result = await db
       .select()
       .from(schema.expenses)
-      .where(eq(schema.expenses.userId, context.authUser.userId));
+      .where(and(...conditions));
     return result.map((e) => ({ ...e, amount: Number(e.amount) }));
   });
 

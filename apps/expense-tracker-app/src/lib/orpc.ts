@@ -14,9 +14,12 @@ const link = new RPCLink({
   },
 });
 
+export const EXPENSES_QUERY_KEY = ["expenses", "list"];
+
 // 1. Create the base client
 export const client = createORPCClient<RouterClient<AppRouter>>(link);
 
 // 2. Create the Smart Utils
 // We use RouterClient<AppRouter> here to "Filter" the types for the frontend
 export const orpc = createORPCReactQueryUtils<RouterClient<AppRouter>>(client);
+

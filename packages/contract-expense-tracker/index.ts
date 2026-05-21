@@ -127,6 +127,62 @@ export const deleteExpenseContract = oc
   .input(z.object({ id: z.number() }))
   .output(z.boolean());
 
+// --- DASHBOARD SCHEMAS ---
+export const dashboardOverviewSchema = z.object({
+  totalIncome: z.number(),
+  totalExpenses: z.number(),
+  balance: z.number(),
+  savingsRate: z.number(),
+});
+
+export const dashboardHighlightsSchema = z.object({
+  topSpendingCategory: z.string().nullable(), // Nullable in case the user has 0 expenses
+  topSpendingAmount: z.number(),
+});
+
+export const dashboardMonthlyCashFlowSchema = z.object({
+  month: z.string(),
+  Income: z.number(),
+  Expenses: z.number(),
+});
+
+export const dashboardExpenseBreakdownSchema = z.object({
+  categoryId: z.number(),
+  name: z.string(),
+  amount: z.number(),
+  percentage: z.number(),
+});
+
+export const dashboardRecentTransactionSchema = z.object({
+  id: z.number(),
+  date: z.date().or(z.string()), // Accept both Date objects or string dates
+  amount: z.number(),
+  category: z.string(),
+});
+
+// This is the final master schema that combines them all
+export const dashboardSummarySchema = z.object({
+  overview: dashboardOverviewSchema,
+  highlights: dashboardHighlightsSchema,
+  monthlyCashFlow: z.array(dashboardMonthlyCashFlowSchema),
+  expenseBreakdown: z.array(dashboardExpenseBreakdownSchema),
+  recentTransactions: z.array(dashboardRecentTransactionSchema),
+});
+
+// --- DASHBOARD CONTRACTS ---
+
+export const getDashboardSummaryContract = oc
+  .input(
+    // It is good practice to allow optional dates so you can filter by "This Month" or "This Year" later
+    z
+      .object({
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      })
+      .optional(),
+  )
+  .output(dashboardSummarySchema);
+
 /**
  * 4. THE CONTRACT METHODS OBJECT
  */
@@ -150,5 +206,8 @@ export const contractMethods = {
     list: listExpensesContract,
     update: updateExpenseContract,
     delete: deleteExpenseContract,
+  },
+  dashboard: {
+    getSummary: getDashboardSummaryContract,
   },
 };

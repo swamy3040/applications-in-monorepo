@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import * as z from "zod";
-import { orpc } from "../../lib/orpc";
+// 👇 IMPORT THE EXPENSES KEY HERE
+import { orpc, EXPENSES_QUERY_KEY } from "../../lib/orpc";
 import { Input } from "../../../@/components/ui/input";
 import { Button } from "../../../@/components/ui/button";
 import {
@@ -58,24 +59,47 @@ export function Categories({ setActiveTab }: CategoriesProps) {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const queryClient = useQueryClient();
 
-  // 👇 1. PURE TANSTACK FLOW: Watches searchQuery inside the key array on every single keystroke
   const { data: categories, isLoading } = useQuery({
     queryKey: ["categories", "list", searchQuery],
     queryFn: () => orpc.categories.list.call({ search: searchQuery }),
   });
 
-  // Mutations
+  // 👇 1. THE CATEGORY MASTER SYNC FUNCTION
+  const invalidateAllCategoryData = async () => {
+    // 1. Refresh Categories (clears all search variations)
+    await queryClient.invalidateQueries({
+      queryKey: ["categories", "list"],
+      exact: false,
+    });
+
+    // 2. Refresh Transactions (in case category names changed)
+    await queryClient.invalidateQueries({
+      queryKey: EXPENSES_QUERY_KEY,
+      exact: false,
+    });
+
+    // 3. Refresh Dashboard (updates pie charts & totals)
+    await queryClient.invalidateQueries({
+      queryKey: ["dashboard", "summary"],
+      exact: false,
+    });
+  };
+
+  // 👇 2. WIRE IT TO ONSUCCESS
   const createMutation = useMutation({
     mutationFn: (values: any) => orpc.categories.create.call(values),
+    onSuccess: invalidateAllCategoryData,
   });
 
   const updateMutation = useMutation({
     mutationFn: (values: any) =>
       orpc.categories.update.call({ id: editingId!, ...values }),
+    onSuccess: invalidateAllCategoryData,
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => orpc.categories.delete.call({ id }),
+    onSuccess: invalidateAllCategoryData,
   });
 
   // Form Setup
@@ -93,10 +117,8 @@ export function Categories({ setActiveTab }: CategoriesProps) {
           await createMutation.mutateAsync(value);
         }
 
-        // 👇 2. CACHE SYNC: Invalidates the explicit flat array structure matching the current search state
-        await queryClient.invalidateQueries({
-          queryKey: ["categories", "list", searchQuery],
-        });
+        // 🗑️ REMOVED the manual queryClient.invalidateQueries from here!
+        // The onSuccess handles it automatically now.
         closeModal();
       } catch (err) {
         console.error("Action failed:", err);
@@ -121,10 +143,7 @@ export function Categories({ setActiveTab }: CategoriesProps) {
     if (!confirm("Are you sure you want to delete this category?")) return;
     await deleteMutation.mutateAsync(id);
 
-    // 👇 3. CACHE SYNC: Ensures the deleted item disappears correctly while filtered
-    await queryClient.invalidateQueries({
-      queryKey: ["categories", "list", searchQuery],
-    });
+    // 🗑️ REMOVED the manual queryClient.invalidateQueries from here too!
   };
 
   return (
@@ -142,7 +161,7 @@ export function Categories({ setActiveTab }: CategoriesProps) {
         </div>
       </div>
 
-      {/* 👇 LAYOUT SEPARATION: Extended full-width search input bar row layout */}
+      {/* LAYOUT SEPARATION: Extended full-width search input bar row layout */}
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />

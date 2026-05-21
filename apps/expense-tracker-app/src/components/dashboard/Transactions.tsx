@@ -59,25 +59,31 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const queryClient = useQueryClient();
 
-  // PURE TANSTACK FLOW: This forces the query key to update on every keystroke
-  // and manually passes the live search string as the body payload.
   const { data: expenses } = useQuery({
-    queryKey: [...EXPENSES_QUERY_KEY, searchQuery], // Use the shared prefix
+    queryKey: [...EXPENSES_QUERY_KEY, searchQuery],
     queryFn: () => orpc.expenses.list.call({ search: searchQuery }),
   });
 
-  const invalidateAllExpenses = () => {
-    queryClient.invalidateQueries({
-      queryKey: EXPENSES_QUERY_KEY, // This prefix matches BOTH the dashboard and the search queries
-      exact: false, // This ensures it clears the dashboard AND all search variations
+  const { data: categories } = useQuery(orpc.categories.list.queryOptions());
+
+  // 👇 THE MAGIC SYNC FUNCTION
+  const invalidateAllExpenses = async () => {
+    // 1. Refresh the Transactions Table (Clears ["expenses", "list"])
+    await queryClient.invalidateQueries({
+      queryKey: EXPENSES_QUERY_KEY,
+      exact: false,
+    });
+
+    // 2. Refresh the new Dashboard UI (Clears ["dashboard", "summary"])
+    await queryClient.invalidateQueries({
+      queryKey: ["dashboard", "summary"],
+      exact: false,
     });
   };
 
-  const { data: categories } = useQuery(orpc.categories.list.queryOptions());
-
   const createMutation = useMutation({
     mutationFn: (values: any) => orpc.expenses.create.call(values),
-    onSuccess: invalidateAllExpenses,
+    onSuccess: invalidateAllExpenses, // 👈 Calls the sync magic automatically!
   });
 
   const updateMutation = useMutation({
@@ -114,10 +120,8 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
           await createMutation.mutateAsync(payload);
         }
 
-        // Invalidate the exact flat cache layout array matching our query
-        await queryClient.invalidateQueries({
-          queryKey: ["expenses", "list", searchQuery],
-        });
+        // Removed the manual queryClient.invalidateQueries here because
+        // onSuccess handles it much cleaner now!
         closeModal();
       } catch (err) {
         console.error("Action failed:", err);
@@ -143,18 +147,12 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
   const onDeleteClick = async (id: number) => {
     if (!confirm("Delete transaction?")) return;
     await deleteMutation.mutateAsync(id);
-
-    // Invalidate the exact matching array pattern here too
-    await queryClient.invalidateQueries({
-      queryKey: ["expenses", "list", searchQuery],
-    });
+    // Removed redundant invalidateQueries here too!
   };
 
   return (
     <div className="space-y-6 text-white">
-      {/* 👇 LAYOUT UPDATE: Flex row stretches items on mobile, flattens to layout row with gap-4 */}
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
-        {/* 👇 Extended search container to fill empty width space */}
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
           <Input
@@ -166,7 +164,6 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
           />
         </div>
 
-        {/* 👇 Button container neatly aligned to the end side */}
         <Dialog
           open={isModalOpen}
           onOpenChange={(open) => !open && closeModal()}

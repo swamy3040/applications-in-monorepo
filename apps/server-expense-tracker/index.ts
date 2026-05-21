@@ -3,7 +3,7 @@ import { config } from "dotenv";
 import path from "path";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { eq, and, sql, like } from "drizzle-orm";
+import { eq, and, sql, like, desc, between } from "drizzle-orm";
 import { contractMethods } from "@repo/contract-expense-tracker";
 import * as schema from "@repo/db-expense-tracker";
 import crypto from "crypto";
@@ -313,6 +313,148 @@ export const deleteExpense = implemented.expenses.delete
     return true;
   });
 
+// --- DASHBOARD HANDLERS ---
+export const getDashboardSummary = implemented.dashboard.getSummary
+  .use(authMiddleware)
+  .handler(async ({ input, context }) => {
+    if (!context.authUser) throw new Error("Unauthorized");
+    const userId = context.authUser.userId;
+
+    // 1. Setup Filters (Handle those optional dates!)
+    const conditions = [eq(schema.expenses.userId, userId)];
+
+    if (input?.startDate && input?.endDate) {
+      conditions.push(
+        between(
+          schema.expenses.date,
+          new Date(input.startDate),
+          new Date(input.endDate),
+        ),
+      );
+    }
+
+    // 2. Fetch the Data (JOIN with Categories to get the exact name)
+    const rawTransactions = await db
+      .select({
+        id: schema.expenses.id,
+        amount: schema.expenses.amount,
+        type: schema.expenses.type,
+        date: schema.expenses.date,
+        categoryId: schema.expenses.categoryId,
+        categoryName: schema.categories.name,
+      })
+      .from(schema.expenses)
+      .leftJoin(
+        schema.categories,
+        eq(schema.expenses.categoryId, schema.categories.id),
+      )
+      .where(and(...conditions))
+      .orderBy(desc(schema.expenses.date));
+
+    // 3. Initialize our empty buckets
+    let totalIncome = 0;
+    let totalExpenses = 0;
+    const categoryTotals: Record<number, { name: string; amount: number }> = {};
+
+    const months = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    const monthlyCashFlow = months.map((month) => ({
+      month,
+      Income: 0,
+      Expenses: 0,
+    }));
+
+    // 4. The Main Engine (Loop through data ONCE and fill all buckets)
+    rawTransactions.forEach((item) => {
+      const amount = Number(item.amount);
+      const monthIndex = new Date(item.date).getMonth();
+
+      if (item.type === "INCOME") {
+        totalIncome += amount;
+        monthlyCashFlow[monthIndex].Income += amount;
+      } else {
+        totalExpenses += amount;
+        monthlyCashFlow[monthIndex].Expenses += amount;
+
+        // Tally category breakdown
+        if (!categoryTotals[item.categoryId]) {
+          categoryTotals[item.categoryId] = {
+            name: item.categoryName || "Uncategorized",
+            amount: 0,
+          };
+        }
+        categoryTotals[item.categoryId].amount += amount;
+      }
+    });
+
+    // 5. Finalize Math (Percentages & Balances)
+    const balance = totalIncome - totalExpenses;
+    const savingsRate =
+      totalIncome > 0
+        ? Number(
+            (((totalIncome - totalExpenses) / totalIncome) * 100).toFixed(1),
+          )
+        : 0;
+
+    // Convert category object to the array Recharts needs
+    const expenseBreakdown = Object.entries(categoryTotals).map(
+      ([catId, data]) => {
+        const percentage =
+          totalExpenses > 0
+            ? Number(((data.amount / totalExpenses) * 100).toFixed(1))
+            : 0;
+
+        return {
+          categoryId: Number(catId),
+          name: data.name,
+          amount: data.amount,
+          percentage,
+        };
+      },
+    );
+
+    // Sort Pie Chart slices by largest amount first
+    expenseBreakdown.sort((a, b) => b.amount - a.amount);
+
+    // 6. Extract Highlights (Top Spending)
+    let topSpendingCategory = null;
+    let topSpendingAmount = 0;
+
+    if (expenseBreakdown.length > 0) {
+      topSpendingCategory = expenseBreakdown[0].name; // The first item is the largest because we just sorted it!
+      topSpendingAmount = expenseBreakdown[0].amount;
+    }
+
+    // 7. Format Recent Transactions for the UI Table (Grab top 5)
+    const recentTransactions = rawTransactions.slice(0, 5).map((item) => ({
+      id: item.id,
+      date: item.date,
+      amount: Number(item.amount),
+      category: item.categoryName || "Uncategorized",
+    }));
+
+    // 8. Return exactly what the Zod schema expects!
+    return {
+      overview: { totalIncome, totalExpenses, balance, savingsRate },
+      highlights: { topSpendingCategory, topSpendingAmount },
+      monthlyCashFlow,
+      expenseBreakdown,
+      recentTransactions,
+    };
+  });
+
 // 4. Final Router
 export const appRouter = implemented.router({
   auth: {
@@ -334,6 +476,9 @@ export const appRouter = implemented.router({
     list: listExpenses,
     update: updateExpense,
     delete: deleteExpense,
+  },
+  dashboard: {
+    getSummary: getDashboardSummary,
   },
 });
 

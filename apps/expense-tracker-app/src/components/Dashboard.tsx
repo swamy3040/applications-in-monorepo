@@ -21,7 +21,6 @@ import {
   Flame,
 } from "lucide-react";
 import { ChartContainer, ChartTooltip } from "../../@/components/ui/chart";
-// Core Recharts components
 import {
   BarChart,
   Bar,
@@ -36,7 +35,7 @@ import type { User } from "@repo/contract-expense-tracker";
 import { useQuery } from "@tanstack/react-query";
 import { Transactions } from "./dashboard/Transactions";
 import { Categories } from "./dashboard/Categories";
-import { orpc, EXPENSES_QUERY_KEY } from "../lib/orpc";
+import { orpc } from "../lib/orpc";
 
 interface DashboardProps {
   user: User | null;
@@ -48,130 +47,32 @@ const barChartConfig = {
   Expenses: { label: "Expenses", color: "#ef4444" },
 } as const;
 
+const PIE_COLORS = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#ec4899",
+  "#14b8a6",
+  "#f97316",
+];
+
 export function Dashboard({ user, onLogout }: DashboardProps) {
   const [activeTab, setActiveTab] = useState("overview");
 
-  const { data: expenses, isLoading: isExpensesLoading } = useQuery({
-    queryKey: EXPENSES_QUERY_KEY,
-    queryFn: () => orpc.expenses.list.call({ search: "" }),
+  // 👇 1. The Single Backend Call
+  const { data: dashboardData, isLoading } = useQuery({
+    queryKey: ["dashboard", "summary"],
+    queryFn: () => orpc.dashboard.getSummary.call(),
   });
 
-  const { data: categories, isLoading: isCategoriesLoading } = useQuery(
-    orpc.categories.list.queryOptions(),
-  );
-
-  const isLoading = isExpensesLoading || isCategoriesLoading;
-
-  const totalIncome =
-    expenses
-      ?.filter((e) => e.type === "INCOME")
-      .reduce((sum, e) => sum + e.amount, 0) || 0;
-
-  const totalExpense =
-    expenses
-      ?.filter((e) => e.type === "EXPENSE")
-      .reduce((sum, e) => sum + e.amount, 0) || 0;
-
-  const totalBalance = totalIncome - totalExpense;
-
-  const savingsRate =
-    totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : 0;
-
-  const getBarChartData = () => {
-    if (!expenses) return [];
-    const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-    const monthlyMap = months.reduce(
-      (acc, month) => {
-        acc[month] = { month, Income: 0, Expenses: 0 };
-        return acc;
-      },
-      {} as Record<string, { month: string; Income: number; Expenses: number }>,
-    );
-
-    expenses.forEach((item) => {
-      const itemDate = new Date(item.date);
-      const monthName = months[itemDate.getMonth()];
-      if (monthlyMap[monthName]) {
-        if (item.type === "INCOME") {
-          monthlyMap[monthName].Income += item.amount;
-        } else {
-          monthlyMap[monthName].Expenses += item.amount;
-        }
-      }
-    });
-
-    return Object.values(monthlyMap);
-  };
-
-  // CLEAN PIE CHART LOGIC
-  const getPieChartData = () => {
-    if (!expenses || !categories) return [];
-
-    // 1. Get ONLY the expense categories
-    const expenseCategories = categories.filter((c) => c.type === "EXPENSE");
-    if (expenseCategories.length === 0) return [];
-
-    // 2. Initialize ALL expense categories with 0 so they ALWAYS show in the text legend
-    const categoryTotals: Record<number, number> = {};
-    
-    expenseCategories.forEach((cat) => {
-      categoryTotals[cat.id] = 0;
-    });
-
-    // 3. Add up the actual expenses
-    const expenseItems = expenses.filter((e) => e.type === "EXPENSE");
-    expenseItems.forEach((item) => {
-      if (categoryTotals[item.categoryId] !== undefined) {
-        categoryTotals[item.categoryId] += item.amount;
-      }
-    });
-
-    const PIE_COLORS = [
-      "#3b82f6",
-      "#10b981",
-      "#f59e0b",
-      "#ef4444",
-      "#8b5cf6",
-      "#ec4899",
-      "#14b8a6",
-      "#f97316",
-    ];
-
-    // 4. Map to the final array
-    return Object.entries(categoryTotals).map(([catId, total], index) => {
-      const cat = expenseCategories.find((c) => c.id === Number(catId));
-      const percentage =
-        totalExpense > 0 ? ((total / totalExpense) * 100).toFixed(1) : "0.0";
-
-      return {
-        name: cat?.name || "Uncategorized",
-        amount: total, // Keeps 0 exactly as 0. Recharts hides the slice, but we keep the data for the legend!
-        percentage: Number(percentage),
-        fill: PIE_COLORS[index % PIE_COLORS.length],
-      };
-    });
-  };
-
-  const barChartData = getBarChartData();
-  const pieChartData = getPieChartData();
-
-  // Safely find the top spending sector without mutating the array order
-  const topCategory = [...pieChartData].sort((a, b) => b.amount - a.amount)[0];
-  const topCategoryName =
-    topCategory && topCategory.amount > 0 ? topCategory.name : "N/A";
+  // 👇 2. The ONLY frontend logic left: Adding colors to the Pie Chart!
+  const pieChartData =
+    dashboardData?.expenseBreakdown.map((item, index) => ({
+      ...item,
+      fill: PIE_COLORS[index % PIE_COLORS.length],
+    })) || [];
 
   if (!user) return null;
 
@@ -190,7 +91,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           <div className="max-w-5xl mx-auto space-y-8">
             {activeTab === "overview" && (
               <>
-                {/* ROW 1: TOTALS */}
+                {/* ROW 1: TOTALS (Directly from API overview) */}
                 <div className="grid gap-4 md:grid-cols-3">
                   <Card className="bg-slate-900 border-slate-800 shadow-xl">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
@@ -201,7 +102,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">
-                        ${totalBalance.toFixed(2)}
+                        ${(dashboardData?.overview.balance || 0).toFixed(2)}
                       </div>
                     </CardContent>
                   </Card>
@@ -214,7 +115,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-green-400">
-                        +${totalIncome.toFixed(2)}
+                        +$
+                        {(dashboardData?.overview.totalIncome || 0).toFixed(2)}
                       </div>
                     </CardContent>
                   </Card>
@@ -227,7 +129,10 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold text-red-400">
-                        -${totalExpense.toFixed(2)}
+                        -$
+                        {(dashboardData?.overview.totalExpenses || 0).toFixed(
+                          2,
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -237,9 +142,11 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                   <div className="flex justify-center p-20">
                     <Loader2 className="size-8 text-blue-500 animate-spin" />
                   </div>
-                ) : expenses && expenses.length > 0 ? (
+                ) : dashboardData &&
+                  (dashboardData.overview.totalIncome > 0 ||
+                    dashboardData.overview.totalExpenses > 0) ? (
                   <>
-                    {/* ROW 2: BAR CHART */}
+                    {/* ROW 2: BAR CHART (Directly from API monthlyCashFlow) */}
                     <Card className="bg-slate-900 border-slate-800 shadow-xl p-6 flex flex-col justify-between w-full">
                       <div className="flex items-center space-x-2 text-slate-300 font-bold mb-4">
                         <BarChart3 className="size-4 text-blue-500" />
@@ -250,7 +157,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                         className="h-64 w-full text-xs"
                       >
                         <BarChart
-                          data={barChartData}
+                          data={dashboardData.monthlyCashFlow}
                           margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                         >
                           <CartesianGrid
@@ -322,45 +229,40 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                           <table className="w-full text-left border-collapse">
                             <thead>
                               <tr className="border-b border-slate-800 text-slate-500 text-sm">
-                                <th className="pb-3 font-medium">
-                                  Description
-                                </th>
-                                <th className="pb-3 font-medium">Type</th>
+                                <th className="pb-3 font-medium">Date</th>
+                                <th className="pb-3 font-medium">Category</th>
                                 <th className="pb-3 font-medium text-right">
                                   Amount
                                 </th>
                               </tr>
                             </thead>
                             <tbody>
-                              {expenses.slice(0, 5).map((expense) => (
-                                <tr
-                                  key={expense.id}
-                                  className="border-b border-slate-800/50 last:border-0 hover:bg-slate-800/20 transition-colors"
-                                >
-                                  <td className="py-4 font-medium text-slate-200 truncate max-w-[150px]">
-                                    {expense.description}
-                                  </td>
-                                  <td className="py-4">
-                                    <span
-                                      className={`text-xs px-2 py-1 rounded-full font-bold ${expense.type === "INCOME" ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}
-                                    >
-                                      {expense.type}
-                                    </span>
-                                  </td>
-                                  <td
-                                    className={`py-4 text-right font-bold ${expense.type === "INCOME" ? "text-green-400" : "text-red-400"}`}
+                              {dashboardData.recentTransactions.map(
+                                (expense) => (
+                                  <tr
+                                    key={expense.id}
+                                    className="border-b border-slate-800/50 last:border-0 hover:bg-slate-800/20 transition-colors"
                                   >
-                                    {expense.type === "INCOME" ? "+" : "-"}$
-                                    {expense.amount.toFixed(2)}
-                                  </td>
-                                </tr>
-                              ))}
+                                    <td className="py-4 font-medium text-slate-400 text-sm">
+                                      {new Date(
+                                        expense.date,
+                                      ).toLocaleDateString()}
+                                    </td>
+                                    <td className="py-4 font-medium text-slate-200">
+                                      {expense.category}
+                                    </td>
+                                    <td className="py-4 text-right font-bold text-slate-200">
+                                      ${expense.amount.toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ),
+                              )}
                             </tbody>
                           </table>
                         </div>
                       </div>
 
-                      {/* PIE CHART WITH EXACT PERCENTAGES */}
+                      {/* PIE CHART */}
                       <Card className="bg-slate-900 border-slate-800 shadow-xl h-full min-h-[380px] flex flex-col md:col-span-2 p-6 justify-between">
                         <div className="flex items-center space-x-2 text-slate-300 font-bold mb-2">
                           <PieIcon className="size-4 text-blue-500" />
@@ -437,7 +339,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                               </RechartsPieChart>
                             </ChartContainer>
 
-                            {/* EXACT PERCENTAGE BREAKDOWN (Shows all categories, including 0%) */}
+                            {/* EXACT PERCENTAGE BREAKDOWN */}
                             <div className="flex flex-wrap justify-center gap-4 mt-6">
                               {pieChartData.map((entry, index) => (
                                 <div
@@ -462,7 +364,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                       </Card>
                     </div>
 
-                    {/* ROW 4: INSIGHT CARDS */}
+                    {/* ROW 4: INSIGHT CARDS (Directly from API highlights & overview) */}
                     <div className="grid gap-4 md:grid-cols-3">
                       <Card className="bg-slate-900 border-slate-800 shadow-xl flex items-center p-6 space-x-4">
                         <div className="p-3 bg-red-500/10 rounded-full">
@@ -473,7 +375,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                             Top Spending Sector
                           </p>
                           <p className="text-lg font-bold text-white mt-0.5">
-                            {topCategoryName}
+                            {dashboardData.highlights.topSpendingCategory ||
+                              "N/A"}
                           </p>
                         </div>
                       </Card>
@@ -487,8 +390,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                             Overall Savings Rate
                           </p>
                           <p className="text-xl font-bold text-green-400 mt-0.5">
-                            {savingsRate > 0
-                              ? `${savingsRate.toFixed(1)}%`
+                            {dashboardData.overview.savingsRate > 0
+                              ? `${dashboardData.overview.savingsRate}%`
                               : "0.0%"}
                           </p>
                         </div>

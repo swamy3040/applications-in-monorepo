@@ -96,7 +96,7 @@ export const createExpenseContract = oc
     z.object({
       amount: z.number().positive(),
       description: z.string(),
-      categoryId: z.number(),
+      categoryId: z.number().optional(),
       date: z.date().optional(),
       type: z.enum(["INCOME", "EXPENSE"]),
     }),

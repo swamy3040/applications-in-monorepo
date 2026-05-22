@@ -263,12 +263,41 @@ export const createExpense = implemented.expenses.create
   .use(authMiddleware)
   .handler(async ({ input, context }) => {
     if (!context.authUser) throw new Error("Unauthorized");
+
+    let finalCategoryId = input.categoryId;
+
+    if (!finalCategoryId) {
+      const fallbackName =
+        input.type === "INCOME" ? "Other Income" : "Other Expense";
+      let defaultCat = await db.query.categories.findFirst({
+        where: and(
+          eq(schema.categories.userId, context.authUser.userId),
+          eq(schema.categories.name, fallbackName),
+          eq(schema.categories.type, input.type),
+        ),
+      });
+
+      if (!defaultCat) {
+        const [newCat] = await db
+          .insert(schema.categories)
+          .values({
+            name: fallbackName,
+            type: input.type,
+            userId: context.authUser.userId,
+          })
+          .returning();
+
+        defaultCat = newCat;
+      }
+      finalCategoryId = defaultCat.id;
+    }
+
     const [newExpense] = await db
       .insert(schema.expenses)
       .values({
         amount: input.amount.toString(),
         description: input.description,
-        categoryId: input.categoryId,
+        categoryId: finalCategoryId,
         type: input.type,
         userId: context.authUser.userId,
         date: input.date ? new Date(input.date) : new Date(),

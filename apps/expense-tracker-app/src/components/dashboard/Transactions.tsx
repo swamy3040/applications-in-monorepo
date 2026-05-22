@@ -50,7 +50,7 @@ interface TransactionsProps {
 const formSchema = z.object({
   description: z.string().min(2, "Too short"),
   amount: z.string().min(1, "Required"),
-  categoryId: z.string().min(1, "Required"),
+  categoryId: z.string(),
   type: z.enum(["INCOME", "EXPENSE"]),
 });
 
@@ -119,7 +119,7 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
         const payload = {
           ...value,
           amount: Number(value.amount),
-          categoryId: Number(value.categoryId),
+          categoryId: value.categoryId ? Number(value.categoryId) : undefined,
           date: new Date(),
         };
 
@@ -160,7 +160,6 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
       (expenses ?? []).map((e) => [e.categoryId, e.categoryName]),
     ).entries(),
   );
- 
 
   const filteredExpenses = (expenses ?? []).filter((item) => {
     if (categoryFilter === "ALL") return true;
@@ -460,7 +459,12 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
                   <TableCell className="font-medium">
                     {item.description}
                   </TableCell>
-                  <TableCell>{item.categoryName || "Uncategorized"}</TableCell>
+                  <TableCell>
+                    {item.categoryName ||
+                      (item.type === "INCOME"
+                        ? "Other Income"
+                        : "Other Expense")}
+                  </TableCell>
                   <TableCell
                     className={`font-bold ${item.type === "INCOME" ? "text-green-400" : "text-red-400"}`}
                   >

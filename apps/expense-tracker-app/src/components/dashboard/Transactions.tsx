@@ -12,6 +12,7 @@ import {
   Edit,
   Loader2,
   Search,
+  Filter,
 } from "lucide-react";
 import {
   Table,
@@ -56,25 +57,25 @@ const formSchema = z.object({
 export function Transactions({ setActiveTab }: TransactionsProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
   const queryClient = useQueryClient();
 
-  const { data: expenses } = useQuery({
+  const { data: expenses, isLoading } = useQuery({
     queryKey: [...EXPENSES_QUERY_KEY, searchQuery],
     queryFn: () => orpc.expenses.list.call({ search: searchQuery }),
   });
 
   const { data: categories } = useQuery(orpc.categories.list.queryOptions());
 
-  // 👇 THE MAGIC SYNC FUNCTION
   const invalidateAllExpenses = async () => {
-    // 1. Refresh the Transactions Table (Clears ["expenses", "list"])
     await queryClient.invalidateQueries({
       queryKey: EXPENSES_QUERY_KEY,
       exact: false,
     });
-
-    // 2. Refresh the new Dashboard UI (Clears ["dashboard", "summary"])
     await queryClient.invalidateQueries({
       queryKey: ["dashboard", "summary"],
       exact: false,
@@ -83,7 +84,7 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
 
   const createMutation = useMutation({
     mutationFn: (values: any) => orpc.expenses.create.call(values),
-    onSuccess: invalidateAllExpenses, // 👈 Calls the sync magic automatically!
+    onSuccess: invalidateAllExpenses,
   });
 
   const updateMutation = useMutation({
@@ -95,6 +96,14 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => orpc.expenses.delete.call({ id }),
     onSuccess: invalidateAllExpenses,
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids: number[]) => orpc.expenses.bulkDelete.call({ ids }),
+    onSuccess: () => {
+      invalidateAllExpenses();
+      setSelectedIds([]);
+    },
   });
 
   const form = useForm({
@@ -119,9 +128,6 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
         } else {
           await createMutation.mutateAsync(payload);
         }
-
-        // Removed the manual queryClient.invalidateQueries here because
-        // onSuccess handles it much cleaner now!
         closeModal();
       } catch (err) {
         console.error("Action failed:", err);
@@ -147,13 +153,50 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
   const onDeleteClick = async (id: number) => {
     if (!confirm("Delete transaction?")) return;
     await deleteMutation.mutateAsync(id);
-    // Removed redundant invalidateQueries here too!
+  };
+
+  const filterOptions = Array.from(
+    new Map(
+      (expenses ?? []).map((e) => [e.categoryId, e.categoryName]),
+    ).entries(),
+  );
+ 
+
+  const filteredExpenses = (expenses ?? []).filter((item) => {
+    if (categoryFilter === "ALL") return true;
+    return item.categoryId.toString() === categoryFilter;
+  });
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredExpenses.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredExpenses.map((e) => e.id));
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (
+      !confirm(
+        `Are you sure you want to delete ${selectedIds.length} transactions?`,
+      )
+    )
+      return;
+    await bulkDeleteMutation.mutateAsync(selectedIds);
   };
 
   return (
     <div className="space-y-6 text-white">
+      {/* Top Action Bar */}
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
-        <div className="relative flex-1 w-full">
+        {/* Search Bar */}
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
           <Input
             type="text"
@@ -163,6 +206,45 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
             className="pl-9 bg-slate-900 border-slate-800 text-white placeholder:text-slate-500 w-full focus-visible:ring-blue-600"
           />
         </div>
+
+        {/* Category Filter Dropdown */}
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-full sm:w-[200px] bg-slate-900 border-slate-800 text-white">
+            <Filter className="w-4 h-4 mr-2 text-slate-400" />
+            <SelectValue placeholder="All Categories" />
+          </SelectTrigger>
+          {/* 👇 FIX 1: position="popper" and sideOffset */}
+          <SelectContent
+            className="bg-slate-900 border-slate-800 text-white"
+            position="popper"
+            sideOffset={5}
+          >
+            <SelectItem value="ALL">All Categories</SelectItem>
+
+            {filterOptions.map(([id, name]) => (
+              <SelectItem key={id} value={id.toString()}>
+                {name as string}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Bulk Delete Button */}
+        {selectedIds.length > 0 && (
+          <Button
+            variant="destructive"
+            onClick={handleBulkDelete}
+            disabled={bulkDeleteMutation.isPending}
+            className="bg-red-900/50 text-red-400 hover:bg-red-900 hover:text-white border border-red-900"
+          >
+            {bulkDeleteMutation.isPending ? (
+              <Loader2 className="animate-spin size-4 mr-2" />
+            ) : (
+              <Trash2 className="size-4 mr-2" />
+            )}
+            Delete Selected ({selectedIds.length})
+          </Button>
+        )}
 
         <Dialog
           open={isModalOpen}
@@ -195,7 +277,7 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
               <form.Field
                 name="type"
                 children={(field) => (
-                  <div className="space-y-5">
+                  <div className="space-y-2">
                     <label className="text-sm font-medium">Type</label>
                     <Select
                       value={field.state.value}
@@ -206,6 +288,7 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
                       <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
                         <SelectValue />
                       </SelectTrigger>
+                      {/* 👇 FIX 2: position="popper" and sideOffset */}
                       <SelectContent
                         className="bg-slate-900 border-slate-800 text-white"
                         position="popper"
@@ -261,7 +344,12 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
                         <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
                           <SelectValue placeholder="Pick" />
                         </SelectTrigger>
-                        <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                        {/* 👇 FIX 3: position="popper" and sideOffset */}
+                        <SelectContent
+                          className="bg-slate-900 border-slate-800 text-white"
+                          position="popper"
+                          sideOffset={5}
+                        >
                           {categories && categories.length > 0 ? (
                             categories.map((c) => (
                               <SelectItem key={c.id} value={c.id.toString()}>
@@ -297,7 +385,7 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
 
               <Button
                 type="submit"
-                className="w-full bg-blue-600 font-bold py-6"
+                className="w-full bg-blue-600 font-bold py-6 mt-2"
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
                 {createMutation.isPending || updateMutation.isPending ? (
@@ -313,10 +401,22 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
         </Dialog>
       </div>
 
+      {/* Data Table */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-slate-800 bg-slate-900/50 hover:bg-transparent">
+              <TableHead className="w-12 text-center">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-800 cursor-pointer accent-blue-600"
+                  checked={
+                    filteredExpenses.length > 0 &&
+                    selectedIds.length === filteredExpenses.length
+                  }
+                  onChange={toggleSelectAll}
+                />
+              </TableHead>
               <TableHead className="text-slate-400">Description</TableHead>
               <TableHead className="text-slate-400">Category</TableHead>
               <TableHead className="text-slate-400">Amount</TableHead>
@@ -324,17 +424,43 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(expenses ?? []).map((item) => {
-              const cat = categories?.find((c) => c.id === item.categoryId);
-              return (
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="text-center py-10 text-slate-500"
+                >
+                  <Loader2 className="size-6 animate-spin mx-auto mb-2" />
+                  Loading transactions...
+                </TableCell>
+              </TableRow>
+            ) : filteredExpenses.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="text-center py-10 text-slate-500"
+                >
+                  No transactions found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredExpenses.map((item) => (
                 <TableRow
                   key={item.id}
                   className="border-slate-800 hover:bg-slate-800/40 transition-colors"
                 >
+                  <TableCell className="text-center">
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded border-slate-700 bg-slate-800 cursor-pointer accent-blue-600"
+                      checked={selectedIds.includes(item.id)}
+                      onChange={() => toggleSelect(item.id)}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">
                     {item.description}
                   </TableCell>
-                  <TableCell>{cat?.name}</TableCell>
+                  <TableCell>{item.categoryName || "Uncategorized"}</TableCell>
                   <TableCell
                     className={`font-bold ${item.type === "INCOME" ? "text-green-400" : "text-red-400"}`}
                   >
@@ -352,12 +478,19 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
                           <MoreHorizontal className="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent className="bg-slate-900 border-slate-800 text-white">
-                        <DropdownMenuItem onClick={() => onEditClick(item)}>
+                      {/* 👇 EXTRA FIX: Added align="end" so this menu doesn't break the layout on small screens */}
+                      <DropdownMenuContent
+                        align="end"
+                        className="bg-slate-900 border-slate-800 text-white"
+                      >
+                        <DropdownMenuItem
+                          onClick={() => onEditClick(item)}
+                          className="hover:bg-slate-800 cursor-pointer"
+                        >
                           <Edit className="mr-2 h-4 w-4" /> Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          className="text-red-400 focus:bg-red-950/30"
+                          className="text-red-400 focus:bg-red-950/30 cursor-pointer"
                           onClick={() => onDeleteClick(item.id)}
                         >
                           <Trash2 className="mr-2 h-4 w-4" /> Delete
@@ -366,8 +499,8 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              );
-            })}
+              ))
+            )}
           </TableBody>
         </Table>
       </div>

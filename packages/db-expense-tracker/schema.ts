@@ -24,6 +24,7 @@ export const categories = types.pgTable("categories", {
     .bigint("user_id", { mode: "number" }) // 👈 Added owner
     .references(() => users.id)
     .notNull(),
+  isActive: types.boolean("is_active").default(true).notNull(),
 });
 
 export const expenses = types.pgTable("expenses", {

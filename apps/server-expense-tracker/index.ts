@@ -3,7 +3,7 @@ import { config } from "dotenv";
 import path from "path";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { eq, and, sql, like, desc, between } from "drizzle-orm";
+import { eq, and, sql, like, desc, between, inArray } from "drizzle-orm";
 import { contractMethods } from "@repo/contract-expense-tracker";
 import * as schema from "@repo/db-expense-tracker";
 import crypto from "crypto";
@@ -177,7 +177,10 @@ export const listCategories = implemented.categories.list
   .use(authMiddleware)
   .handler(async ({ context, input }) => {
     if (!context.authUser) throw new Error("Unauthorized");
-    const conditions = [eq(schema.categories.userId, context.authUser.userId)];
+    const conditions = [
+      eq(schema.categories.userId, context.authUser.userId),
+      eq(schema.categories.isActive, true),
+    ];
     if (input?.search) {
       conditions.push(
         like(
@@ -217,17 +220,42 @@ export const deleteCategory = implemented.categories.delete
   .use(authMiddleware)
   .handler(async ({ input, context }) => {
     if (!context.authUser) throw new Error("Unauthorized");
-    const [deleted] = await db
-      .delete(schema.categories)
-      .where(
-        and(
-          eq(schema.categories.id, input.id),
-          eq(schema.categories.userId, context.authUser.userId),
-        ),
-      )
-      .returning();
-    if (!deleted) throw new Error("Category not found or unauthorized");
-    return true;
+
+    if (input.deleteTransactions) {
+      await db
+        .delete(schema.expenses)
+        .where(
+          and(
+            eq(schema.expenses.categoryId, input.id),
+            eq(schema.expenses.userId, context.authUser.userId),
+          ),
+        );
+
+      const [deleted] = await db
+        .delete(schema.categories)
+        .where(
+          and(
+            eq(schema.categories.id, input.id),
+            eq(schema.categories.userId, context.authUser.userId),
+          ),
+        )
+        .returning();
+      if (!deleted) throw new Error("Category not found or unauthorized");
+      return true;
+    } else {
+      const [updated] = await db
+        .update(schema.categories)
+        .set({ isActive: false })
+        .where(
+          and(
+            eq(schema.categories.id, input.id),
+            eq(schema.categories.userId, context.authUser.userId),
+          ),
+        )
+        .returning();
+      if (!updated) throw new Error("Category not found");
+      return true;
+    }
   });
 
 // --- EXPENSE HANDLERS ---
@@ -249,14 +277,14 @@ export const createExpense = implemented.expenses.create
     return { ...newExpense, amount: Number(newExpense.amount) };
   });
 
+// Inside your backend file
 export const listExpenses = implemented.expenses.list
   .use(authMiddleware)
   .handler(async ({ context, input }) => {
     if (!context.authUser) throw new Error("Unauthorized");
-    // 1. 👇 Set up user ownership filter
+
     const conditions = [eq(schema.expenses.userId, context.authUser.userId)];
 
-    // 2. 👇 If searching, compare description strings securely
     if (input?.search) {
       conditions.push(
         like(
@@ -265,10 +293,28 @@ export const listExpenses = implemented.expenses.list
         ),
       );
     }
+
+    // 👇 ADD THIS: The SQL JOIN to attach the category name
     const result = await db
-      .select()
+      .select({
+        id: schema.expenses.id,
+        amount: schema.expenses.amount,
+        description: schema.expenses.description,
+        categoryId: schema.expenses.categoryId,
+        date: schema.expenses.date,
+        type: schema.expenses.type,
+        userId: schema.expenses.userId,
+        // Grab the name directly from the categories table!
+        categoryName: schema.categories.name,
+      })
       .from(schema.expenses)
-      .where(and(...conditions));
+      .leftJoin(
+        schema.categories,
+        eq(schema.expenses.categoryId, schema.categories.id),
+      )
+      .where(and(...conditions))
+      .orderBy(desc(schema.expenses.date));
+
     return result.map((e) => ({ ...e, amount: Number(e.amount) }));
   });
 
@@ -310,6 +356,23 @@ export const deleteExpense = implemented.expenses.delete
       )
       .returning();
     if (!deleted) throw new Error("Expense not found or unauthorized");
+    return true;
+  });
+
+export const bulkDeleteExpense = implemented.expenses.bulkDelete
+  .use(authMiddleware)
+  .handler(async ({ input, context }) => {
+    if (!context.authUser) throw new Error("Unauthorized");
+
+    await db
+      .delete(schema.expenses)
+      .where(
+        and(
+          inArray(schema.expenses.id, input.ids),
+          eq(schema.expenses.userId, context.authUser.userId),
+        ),
+      );
+
     return true;
   });
 
@@ -476,6 +539,7 @@ export const appRouter = implemented.router({
     list: listExpenses,
     update: updateExpense,
     delete: deleteExpense,
+    bulkDelete: bulkDeleteExpense,
   },
   dashboard: {
     getSummary: getDashboardSummary,

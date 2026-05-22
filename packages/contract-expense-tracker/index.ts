@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { xid, z } from "zod";
 import { oc } from "@orpc/contract";
 
 export const UserSchema = z.object({
@@ -15,6 +15,7 @@ export const categoriesSchema = z.object({
   name: z.string(),
   type: z.enum(["INCOME", "EXPENSE"]),
   userId: z.number(),
+  isActive: z.boolean(),
 });
 
 export const expensesSchema = z.object({
@@ -25,6 +26,7 @@ export const expensesSchema = z.object({
   date: z.date(),
   type: z.enum(["INCOME", "EXPENSE"]),
   userId: z.number(),
+  categoryName: z.string().nullable().optional(),
 });
 
 // --- AUTH CONTRACTS ---
@@ -69,7 +71,6 @@ export const listCategoriesContract = oc
   )
   .output(z.array(categoriesSchema));
 
-// 👇 NEW: Update Category
 export const updateCategoryContract = oc
   .input(
     z.object({
@@ -80,9 +81,13 @@ export const updateCategoryContract = oc
   )
   .output(categoriesSchema);
 
-// 👇 NEW: Delete Category
 export const deleteCategoryContract = oc
-  .input(z.object({ id: z.number() }))
+  .input(
+    z.object({
+      id: z.number(),
+      deleteTransactions: z.boolean().default(false).optional(),
+    }),
+  )
   .output(z.boolean());
 
 // --- EXPENSE CONTRACTS ---
@@ -102,7 +107,7 @@ export const listExpensesContract = oc
   .input(
     z
       .object({
-        search: z.string().optional(), // 👈 Accepts an optional search query string
+        search: z.string().optional(),
       })
       .optional(),
   )
@@ -122,9 +127,16 @@ export const updateExpenseContract = oc
   )
   .output(expensesSchema);
 
-// 👇 NEW: Delete Expense
 export const deleteExpenseContract = oc
   .input(z.object({ id: z.number() }))
+  .output(z.boolean());
+
+export const bulkDeleteExpenseContract = oc
+  .input(
+    z.object({
+      ids: z.array(z.number()),
+    }),
+  )
   .output(z.boolean());
 
 // --- DASHBOARD SCHEMAS ---
@@ -206,6 +218,7 @@ export const contractMethods = {
     list: listExpensesContract,
     update: updateExpenseContract,
     delete: deleteExpenseContract,
+    bulkDelete: bulkDeleteExpenseContract,
   },
   dashboard: {
     getSummary: getDashboardSummaryContract,

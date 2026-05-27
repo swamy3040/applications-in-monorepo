@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "@tanstack/react-form";
 import * as z from "zod";
@@ -13,6 +13,8 @@ import {
   Loader2,
   Search,
   Filter,
+  Download,
+  Upload,
 } from "lucide-react";
 import {
   Table,
@@ -42,6 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../../@/components/ui/select";
+import Papa from "papaparse";
 
 interface TransactionsProps {
   setActiveTab: (tab: string) => void;
@@ -61,6 +64,7 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const queryClient = useQueryClient();
 
@@ -103,6 +107,20 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
     onSuccess: () => {
       invalidateAllExpenses();
       setSelectedIds([]);
+    },
+  });
+
+  // 👇 NEW: The mutation that sends data to our backend pipeline
+  const bulkImportMutation = useMutation({
+    mutationFn: (transactions: any[]) =>
+      orpc.expenses.bulkImport.call({ transactions }),
+    onSuccess: (data) => {
+      invalidateAllExpenses();
+      alert(`Successfully imported ${data.insertedCount} transactions!`);
+    },
+    onError: (error) => {
+      console.error("Import failed:", error);
+      alert("Failed to import transactions. Check the console for details.");
     },
   });
 
@@ -190,6 +208,85 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
     await bulkDeleteMutation.mutateAsync(selectedIds);
   };
 
+  // 👇 PASTE THIS NEW EXPORT FUNCTION HERE 👇
+  const handleExportTransactions = () => {
+    // 1. Check if boxes are ticked. If yes, export those. If no, export the current filtered list.
+    const dataToExport =
+      selectedIds.length > 0
+        ? filteredExpenses.filter((e) => selectedIds.includes(e.id))
+        : filteredExpenses;
+
+    if (dataToExport.length === 0) {
+      alert("No transactions to export.");
+      return;
+    }
+
+    // 2. Clean up the data for the CSV
+    const formattedData = dataToExport.map((item) => {
+      const dateObj = new Date(item.date);
+      const formattedDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}`;
+
+      return {
+        Date: formattedDate,
+        Description: item.description,
+        Amount: item.amount,
+        Type: item.type,
+        Category:
+          item.categoryName ||
+          (item.type === "INCOME" ? "Other Income" : "Other Expense"),
+      };
+    });
+    // 3. Convert back to CSV text and force download
+    const csv = Papa.unparse(formattedData);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Transactions_Export.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // 👇 UPDATED: Cleans the CSV data and sends it to the backend
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const formattedData = results.data
+          .filter((row: any) => row.Date && row.Amount) // Skip completely empty rows
+          .map((row: any) => ({
+            date: row.Date,
+            description: row.Description || "Imported Transaction",
+            amount: Number(row.Amount),
+            type: row.Type?.toUpperCase() === "INCOME" ? "INCOME" : "EXPENSE",
+            categoryName: row.Category || undefined,
+          }));
+
+        if (formattedData.length === 0) {
+          alert("No valid data found in the CSV.");
+          return;
+        }
+
+        try {
+          await bulkImportMutation.mutateAsync(formattedData);
+        } catch (error) {
+          console.error("Mutation error", error);
+        }
+
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      },
+      error: (error) => {
+        console.error("Error parsing file:", error);
+        alert("Failed to read the file.");
+      },
+    });
+  };
+
   return (
     <div className="space-y-6 text-white">
       {/* Top Action Bar */}
@@ -245,84 +342,116 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
           </Button>
         )}
 
-        <Dialog
-          open={isModalOpen}
-          onOpenChange={(open) => !open && closeModal()}
-        >
-          <DialogTrigger asChild>
-            <Button
-              className="bg-blue-600 hover:bg-blue-500 font-bold whitespace-nowrap"
-              onClick={() => setIsModalOpen(true)}
-            >
-              <Plus className="mr-2 size-4" /> Add Transaction
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+            onClick={handleExportTransactions}
+          >
+            <Download className="mr-2 size-4" /> Export
+          </Button>
+          {/* 1. Download Template Button */}
+          <Button
+            variant="outline"
+            className="border-slate-700 text-slate-300 hover:bg-slate-800 hidden sm:flex"
+            onClick={() => {
+              const headers = "Date,Description,Amount,Type,Category\n";
+              const exampleRow =
+                "2026-05-22,Morning Coffee,150,EXPENSE,Food & Dining\n";
+              const csvContent =
+                "data:text/csv;charset=utf-8," + headers + exampleRow;
+              const encodedUri = encodeURI(csvContent);
+              const link = document.createElement("a");
+              link.setAttribute("href", encodedUri);
+              link.setAttribute("download", "Import_Template.csv");
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+          >
+            <Download className="mr-2 size-4" /> Template
+          </Button>
 
-          <DialogContent className="bg-slate-900 border-slate-800 text-white !max-w-md">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                {editingId ? "Edit Transaction" : "New Transaction"}
-              </DialogTitle>
-            </DialogHeader>
+          {/* 2. Hidden File Input */}
+          <input
+            type="file"
+            accept=".csv"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            className="hidden"
+          />
 
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                form.handleSubmit();
-              }}
-              className="space-y-4 pt-4"
-            >
-              <form.Field
-                name="type"
-                children={(field) => (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Type</label>
-                    <Select
-                      value={field.state.value}
-                      onValueChange={(val) =>
-                        field.handleChange(val as "INCOME" | "EXPENSE")
-                      }
-                    >
-                      <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      {/* 👇 FIX 2: position="popper" and sideOffset */}
-                      <SelectContent
-                        className="bg-slate-900 border-slate-800 text-white"
-                        position="popper"
-                        sideOffset={5}
-                      >
-                        <SelectItem value="EXPENSE">Expense</SelectItem>
-                        <SelectItem value="INCOME">Income</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              />
+          {/* 3. Import Button */}
+          <Button
+            variant="outline"
+            className="border-slate-700 text-slate-300 hover:bg-slate-800"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="mr-2 size-4" /> Import
+          </Button>
 
-              <form.Field
-                name="description"
-                children={(field) => (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Description</label>
-                    <Input
-                      value={field.state.value}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      className="bg-slate-800 border-slate-700"
-                    />
-                  </div>
-                )}
-              />
+          <Dialog
+            open={isModalOpen}
+            onOpenChange={(open) => !open && closeModal()}
+          >
+            <DialogTrigger asChild>
+              <Button
+                className="bg-blue-600 hover:bg-blue-500 font-bold whitespace-nowrap"
+                onClick={() => setIsModalOpen(true)}
+              >
+                <Plus className="mr-2 size-4" /> Add Transaction
+              </Button>
+            </DialogTrigger>
 
-              <div className="grid grid-cols-2 gap-4">
+            <DialogContent className="bg-slate-900 border-slate-800 text-white !max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold">
+                  {editingId ? "Edit Transaction" : "New Transaction"}
+                </DialogTitle>
+              </DialogHeader>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  form.handleSubmit();
+                }}
+                className="space-y-4 pt-4"
+              >
                 <form.Field
-                  name="amount"
+                  name="type"
                   children={(field) => (
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Amount</label>
+                      <label className="text-sm font-medium">Type</label>
+                      <Select
+                        value={field.state.value}
+                        onValueChange={(val) =>
+                          field.handleChange(val as "INCOME" | "EXPENSE")
+                        }
+                      >
+                        <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        {/* 👇 FIX 2: position="popper" and sideOffset */}
+                        <SelectContent
+                          className="bg-slate-900 border-slate-800 text-white"
+                          position="popper"
+                          sideOffset={5}
+                        >
+                          <SelectItem value="EXPENSE">Expense</SelectItem>
+                          <SelectItem value="INCOME">Income</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                />
+
+                <form.Field
+                  name="description"
+                  children={(field) => (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Description</label>
                       <Input
-                        type="number"
                         value={field.state.value}
                         onChange={(e) => field.handleChange(e.target.value)}
                         className="bg-slate-800 border-slate-700"
@@ -331,73 +460,92 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
                   )}
                 />
 
-                <form.Field
-                  name="categoryId"
-                  children={(field) => (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Category</label>
-                      <Select
-                        onValueChange={(val) => field.handleChange(val)}
-                        value={field.state.value}
-                      >
-                        <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
-                          <SelectValue placeholder="Pick" />
-                        </SelectTrigger>
-                        {/* 👇 FIX 3: position="popper" and sideOffset */}
-                        <SelectContent
-                          className="bg-slate-900 border-slate-800 text-white"
-                          position="popper"
-                          sideOffset={5}
-                        >
-                          {categories && categories.length > 0 ? (
-                            categories.map((c) => (
-                              <SelectItem key={c.id} value={c.id.toString()}>
-                                {c.name}
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <div className="p-4 text-center space-y-2">
-                              <p className="text-xs text-slate-400">
-                                No categories created yet
-                              </p>
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="w-full text-xs h-7 bg-blue-600"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  closeModal();
-                                  setActiveTab("categories");
-                                }}
-                              >
-                                Create a Category First
-                              </Button>
-                            </div>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <form.Field
+                    name="amount"
+                    children={(field) => (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Amount</label>
+                        <Input
+                          type="number"
+                          value={field.state.value}
+                          onChange={(e) => field.handleChange(e.target.value)}
+                          className="bg-slate-800 border-slate-700"
+                        />
+                      </div>
+                    )}
+                  />
 
-              <Button
-                type="submit"
-                className="w-full bg-blue-600 font-bold py-6 mt-2"
-                disabled={createMutation.isPending || updateMutation.isPending}
-              >
-                {createMutation.isPending || updateMutation.isPending ? (
-                  <Loader2 className="animate-spin" />
-                ) : editingId ? (
-                  "Update Transaction"
-                ) : (
-                  "Save Transaction"
-                )}
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+                  <form.Field
+                    name="categoryId"
+                    children={(field) => (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Category</label>
+                        <Select
+                          onValueChange={(val) => field.handleChange(val)}
+                          value={field.state.value}
+                        >
+                          <SelectTrigger className="bg-slate-800 border-slate-700 w-full">
+                            <SelectValue placeholder="Pick" />
+                          </SelectTrigger>
+                          {/* 👇 FIX 3: position="popper" and sideOffset */}
+                          <SelectContent
+                            className="bg-slate-900 border-slate-800 text-white"
+                            position="popper"
+                            sideOffset={5}
+                          >
+                            {categories && categories.length > 0 ? (
+                              categories.map((c) => (
+                                <SelectItem key={c.id} value={c.id.toString()}>
+                                  {c.name}
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <div className="p-4 text-center space-y-2">
+                                <p className="text-xs text-slate-400">
+                                  No categories created yet
+                                </p>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="w-full text-xs h-7 bg-blue-600"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    closeModal();
+                                    setActiveTab("categories");
+                                  }}
+                                >
+                                  Create a Category First
+                                </Button>
+                              </div>
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  className="w-full bg-blue-600 font-bold py-6 mt-2"
+                  disabled={
+                    createMutation.isPending || updateMutation.isPending
+                  }
+                >
+                  {createMutation.isPending || updateMutation.isPending ? (
+                    <Loader2 className="animate-spin" />
+                  ) : editingId ? (
+                    "Update Transaction"
+                  ) : (
+                    "Save Transaction"
+                  )}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Data Table */}

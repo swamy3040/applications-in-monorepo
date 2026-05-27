@@ -139,6 +139,27 @@ export const bulkDeleteExpenseContract = oc
   )
   .output(z.boolean());
 
+export const bulkImportExpenseContract = oc
+  .input(
+    z.object({
+      transactions: z.array(
+        z.object({
+          date: z.string(), // We send dates as strings from the CSV
+          description: z.string(),
+          amount: z.number().positive(),
+          type: z.enum(["INCOME", "EXPENSE"]),
+          categoryName: z.string().optional(), // We pass the string name, not the ID
+        }),
+      ),
+    }),
+  )
+  .output(
+    z.object({
+      success: z.boolean(),
+      insertedCount: z.number(),
+    }),
+  );
+
 // --- DASHBOARD SCHEMAS ---
 export const dashboardOverviewSchema = z.object({
   totalIncome: z.number(),
@@ -219,6 +240,7 @@ export const contractMethods = {
     update: updateExpenseContract,
     delete: deleteExpenseContract,
     bulkDelete: bulkDeleteExpenseContract,
+    bulkImport: bulkImportExpenseContract,
   },
   dashboard: {
     getSummary: getDashboardSummaryContract,

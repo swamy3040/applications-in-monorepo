@@ -405,6 +405,88 @@ export const bulkDeleteExpense = implemented.expenses.bulkDelete
     return true;
   });
 
+export const bulkImportExpense = implemented.expenses.bulkImport
+  .use(authMiddleware)
+  .handler(async ({ input, context }) => {
+    if (!context.authUser) throw new Error("Unauthorized");
+
+    const rawTransactions = input.transactions;
+    const userId = context.authUser.userId;
+
+    if (rawTransactions.length === 0) {
+      return { success: true, insertedCount: 0 };
+    }
+
+    // 1. Fetch all existing categories for this user
+    const existingCategories = await db.query.categories.findMany({
+      where: eq(schema.categories.userId, userId),
+    });
+
+    // Create a fast lookup map (e.g., "Food & Dining-EXPENSE" -> ID: 5)
+    const categoryMap = new Map();
+    for (const cat of existingCategories) {
+      categoryMap.set(`${cat.name}-${cat.type}`, cat.id);
+    }
+
+    // 2. Identify missing categories from the Excel sheet
+    const missingCategoriesToCreate = new Map();
+
+    for (const tx of rawTransactions) {
+      const catName =
+        tx.categoryName ||
+        (tx.type === "INCOME" ? "Other Income" : "Other Expense");
+      const mapKey = `${catName}-${tx.type}`;
+
+      if (!categoryMap.has(mapKey) && !missingCategoriesToCreate.has(mapKey)) {
+        missingCategoriesToCreate.set(mapKey, {
+          name: catName,
+          type: tx.type,
+          userId: userId,
+        });
+      }
+    }
+
+    // 3. Bulk insert the missing categories (if any)
+    if (missingCategoriesToCreate.size > 0) {
+      const newCatsToInsert = Array.from(missingCategoriesToCreate.values());
+
+      const insertedCats = await db
+        .insert(schema.categories)
+        .values(newCatsToInsert)
+        .returning();
+
+      // Add the newly created IDs back into our fast lookup map
+      for (const cat of insertedCats) {
+        categoryMap.set(`${cat.name}-${cat.type}`, cat.id);
+      }
+    }
+
+    // 4. Map the Excel data into Database-ready objects
+    const expensesToInsert = rawTransactions.map((tx) => {
+      const catName =
+        tx.categoryName ||
+        (tx.type === "INCOME" ? "Other Income" : "Other Expense");
+      const mapKey = `${catName}-${tx.type}`;
+
+      return {
+        amount: tx.amount.toString(), // Converted to string to match your createExpense schema
+        description: tx.description,
+        categoryId: categoryMap.get(mapKey),
+        type: tx.type,
+        userId: userId,
+        date: new Date(tx.date),
+      };
+    });
+
+    // 5. Bulk Insert all Expenses in one fast query
+    await db.insert(schema.expenses).values(expensesToInsert);
+
+    return {
+      success: true,
+      insertedCount: expensesToInsert.length,
+    };
+  });
+
 // --- DASHBOARD HANDLERS ---
 export const getDashboardSummary = implemented.dashboard.getSummary
   .use(authMiddleware)
@@ -569,6 +651,7 @@ export const appRouter = implemented.router({
     update: updateExpense,
     delete: deleteExpense,
     bulkDelete: bulkDeleteExpense,
+    bulkImport: bulkImportExpense,
   },
   dashboard: {
     getSummary: getDashboardSummary,

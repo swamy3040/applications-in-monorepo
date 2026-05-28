@@ -15,6 +15,8 @@ import {
   Filter,
   Download,
   Upload,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import {
   Table,
@@ -65,6 +67,10 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importSuccessCount, setImportSuccessCount] = useState<number | null>(
+    null,
+  );
 
   const queryClient = useQueryClient();
 
@@ -116,11 +122,32 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
       orpc.expenses.bulkImport.call({ transactions }),
     onSuccess: (data) => {
       invalidateAllExpenses();
-      alert(`Successfully imported ${data.insertedCount} transactions!`);
+      setImportSuccessCount(data.insertedCount);
     },
-    onError: (error) => {
+    // onError: (error) => {
+    //   console.error("Import failed:", error);
+    //   alert("Failed to import transactions. Check the console for details.");
+    // },
+    onError: (error: any) => {
       console.error("Import failed:", error);
-      alert("Failed to import transactions. Check the console for details.");
+
+      const validationIssues = error?.data?.issues || error?.issues;
+
+      if (validationIssues && validationIssues.length > 0) {
+        const errorMessages = validationIssues.map((issue: any) => {
+          const rowInfo =
+            issue.path && issue.path[1] !== undefined
+              ? `Row ${Number(issue.path[1]) + 1}: `
+              : "";
+          return `${rowInfo}${issue.message}`;
+        });
+
+        console.log(errorMessages);
+        // 👇 CHANGED: Instead of alert(), save errors to state to open our custom modal
+        setImportErrors(errorMessages);
+      } else {
+        alert(error.message || "An unexpected server error occurred.");
+      }
     },
   });
 
@@ -249,6 +276,7 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
   };
 
   // 👇 UPDATED: Cleans the CSV data and sends it to the backend
+  // 👇 UPDATED: Sends RAW data to the backend so the Contract can catch everything
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -257,15 +285,21 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
-        const formattedData = results.data
-          .filter((row: any) => row.Date && row.Amount) // Skip completely empty rows
-          .map((row: any) => ({
-            date: row.Date,
-            description: row.Description || "Imported Transaction",
-            amount: Number(row.Amount),
-            type: row.Type?.toUpperCase() === "INCOME" ? "INCOME" : "EXPENSE",
-            categoryName: row.Category || undefined,
-          }));
+        // 1. REMOVED the .filter() line so bad rows are NOT deleted silently
+        const formattedData = results.data.map((row: any) => ({
+          // 2. Pass exactly what is in the Excel cell, or an empty string if blank
+          date: row.Date || "",
+          // 3. REMOVED the "Imported Transaction" fallback
+          description: row.Description || "",
+          // 4. If amount is blank, pass 0 so Zod's .positive() can catch it
+          amount:
+            row.Amount === "" || row.Amount === undefined
+              ? 0
+              : Number(row.Amount),
+          // 5. REMOVED the forced fallback to "EXPENSE"
+          type: row.Type ? row.Type.toUpperCase().trim() : "",
+          categoryName: row.Category || undefined,
+        }));
 
         if (formattedData.length === 0) {
           alert("No valid data found in the CSV.");
@@ -549,113 +583,179 @@ export function Transactions({ setActiveTab }: TransactionsProps) {
       </div>
 
       {/* Data Table */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-slate-800 bg-slate-900/50 hover:bg-transparent">
-              <TableHead className="w-12 text-center">
-                <input
-                  type="checkbox"
-                  className="w-4 h-4 rounded border-slate-700 bg-slate-800 cursor-pointer accent-blue-600"
-                  checked={
-                    filteredExpenses.length > 0 &&
-                    selectedIds.length === filteredExpenses.length
-                  }
-                  onChange={toggleSelectAll}
-                />
-              </TableHead>
-              <TableHead className="text-slate-400">Description</TableHead>
-              <TableHead className="text-slate-400">Category</TableHead>
-              <TableHead className="text-slate-400">Amount</TableHead>
-              <TableHead className="text-slate-400">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="text-center py-10 text-slate-500"
-                >
-                  <Loader2 className="size-6 animate-spin mx-auto mb-2" />
-                  Loading transactions...
-                </TableCell>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden flex flex-col h-[calc(100vh-220px)]">
+        <div className="flex-1 overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-slate-800 bg-slate-900/50 hover:bg-transparent">
+                <TableHead className="w-12 text-center">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-800 cursor-pointer accent-blue-600"
+                    checked={
+                      filteredExpenses.length > 0 &&
+                      selectedIds.length === filteredExpenses.length
+                    }
+                    onChange={toggleSelectAll}
+                  />
+                </TableHead>
+                <TableHead className="text-slate-400">Description</TableHead>
+                <TableHead className="text-slate-400">Category</TableHead>
+                <TableHead className="text-slate-400">Amount</TableHead>
+                <TableHead className="text-slate-400">Actions</TableHead>
               </TableRow>
-            ) : filteredExpenses.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="text-center py-10 text-slate-500"
-                >
-                  No transactions found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredExpenses.map((item) => (
-                <TableRow
-                  key={item.id}
-                  className="border-slate-800 hover:bg-slate-800/40 transition-colors"
-                >
-                  <TableCell className="text-center">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded border-slate-700 bg-slate-800 cursor-pointer accent-blue-600"
-                      checked={selectedIds.includes(item.id)}
-                      onChange={() => toggleSelect(item.id)}
-                    />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {item.description}
-                  </TableCell>
-                  <TableCell>
-                    {item.categoryName ||
-                      (item.type === "INCOME"
-                        ? "Other Income"
-                        : "Other Expense")}
-                  </TableCell>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
                   <TableCell
-                    className={`font-bold ${item.type === "INCOME" ? "text-green-400" : "text-red-400"}`}
+                    colSpan={5}
+                    className="text-center py-10 text-slate-500"
                   >
-                    {item.type === "INCOME" ? "+" : "-"}$
-                    {Number(item.amount).toFixed(2)}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="hover:bg-slate-800"
-                        >
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      {/* 👇 EXTRA FIX: Added align="end" so this menu doesn't break the layout on small screens */}
-                      <DropdownMenuContent
-                        align="end"
-                        className="bg-slate-900 border-slate-800 text-white"
-                      >
-                        <DropdownMenuItem
-                          onClick={() => onEditClick(item)}
-                          className="hover:bg-slate-800 cursor-pointer"
-                        >
-                          <Edit className="mr-2 h-4 w-4" /> Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-red-400 focus:bg-red-950/30 cursor-pointer"
-                          onClick={() => onDeleteClick(item.id)}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Loader2 className="size-6 animate-spin mx-auto mb-2" />
+                    Loading transactions...
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+              ) : filteredExpenses.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center py-10 text-slate-500"
+                  >
+                    No transactions found.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredExpenses.map((item) => (
+                  <TableRow
+                    key={item.id}
+                    className="border-slate-800 hover:bg-slate-800/40 transition-colors"
+                  >
+                    <TableCell className="text-center">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 rounded border-slate-700 bg-slate-800 cursor-pointer accent-blue-600"
+                        checked={selectedIds.includes(item.id)}
+                        onChange={() => toggleSelect(item.id)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {item.description}
+                    </TableCell>
+                    <TableCell>
+                      {item.categoryName ||
+                        (item.type === "INCOME"
+                          ? "Other Income"
+                          : "Other Expense")}
+                    </TableCell>
+                    <TableCell
+                      className={`font-bold ${item.type === "INCOME" ? "text-green-400" : "text-red-400"}`}
+                    >
+                      {item.type === "INCOME" ? "+" : "-"}$
+                      {Number(item.amount).toFixed(2)}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="hover:bg-slate-800"
+                          >
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        {/* 👇 EXTRA FIX: Added align="end" so this menu doesn't break the layout on small screens */}
+                        <DropdownMenuContent
+                          align="end"
+                          className="bg-slate-900 border-slate-800 text-white"
+                        >
+                          <DropdownMenuItem
+                            onClick={() => onEditClick(item)}
+                            className="hover:bg-slate-800 cursor-pointer"
+                          >
+                            <Edit className="mr-2 h-4 w-4" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-red-400 focus:bg-red-950/30 cursor-pointer"
+                            onClick={() => onDeleteClick(item.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
+
+      {/* Custom Excel Import Validation Error Modal */}
+      <Dialog
+        open={importErrors.length > 0}
+        onOpenChange={(open) => !open && setImportErrors([])}
+      >
+        <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-[600px] max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-red-500 flex items-center gap-2">
+              <AlertCircle className="size-5" /> Import Data Validation Failed
+            </DialogTitle>
+            <p className="text-sm text-slate-400 pt-1">
+              Please fix these formatting issues in your spreadsheet and try
+              uploading your file again.
+            </p>
+          </DialogHeader>
+
+          {/* Scrollable container for many errors */}
+          <div className="flex-1 overflow-y-auto my-4 pr-2 space-y-2 border border-slate-800 bg-slate-950 p-4 rounded-lg max-h-[45vh]">
+            {importErrors.map((errMsg, index) => (
+              <div
+                key={index}
+                className="text-sm text-red-300 bg-red-950/20 border border-red-900/30 px-3 py-2.5 rounded flex items-start gap-3"
+              >
+                <span className="font-bold text-red-400">{index + 1}.</span>
+                <span className="leading-relaxed">{errMsg}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button
+              className="bg-slate-800 hover:bg-slate-700 text-white font-medium px-6"
+              onClick={() => setImportErrors([])}
+            >
+              Close and Review File
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={importSuccessCount !== null}
+        onOpenChange={(open) => !open && setImportSuccessCount(null)}
+      >
+        <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md flex flex-col items-center text-center py-8">
+          <div className="size-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mb-4">
+            <CheckCircle2 className="size-8" />
+          </div>
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">
+              Import Successful!
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-2 text-slate-300">
+            Successfully imported{" "}
+            <span className="font-bold text-white text-lg">
+              {importSuccessCount}
+            </span>{" "}
+            transactions into your account.
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

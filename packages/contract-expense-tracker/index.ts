@@ -142,15 +142,41 @@ export const bulkDeleteExpenseContract = oc
 export const bulkImportExpenseContract = oc
   .input(
     z.object({
-      transactions: z.array(
-        z.object({
-          date: z.string(), // We send dates as strings from the CSV
-          description: z.string(),
-          amount: z.number().positive(),
-          type: z.enum(["INCOME", "EXPENSE"]),
-          categoryName: z.string().optional(), // We pass the string name, not the ID
-        }),
-      ),
+      transactions: z
+        .array(
+          z.object({
+            date: z
+              .string()
+              .min(1, { message: "Date column cannot be empty" })
+              .refine(
+                (val) => {
+                  const parsedDate = new Date(val);
+                  return (
+                    !isNaN(parsedDate.getTime()) && parsedDate <= new Date()
+                  );
+                },
+                {
+                  message:
+                    "Date must be a valid format and cannot be in the future",
+                },
+              ),
+            description: z
+              .string()
+              .min(1, { message: "Description column cannot be empty" })
+              .min(2, { message: "Description must be at least 2 characters" }),
+            amount: z
+              .number({ message: "Amount must be a valid number" })
+              .positive("Amount must be greater than 0"),
+            type: z
+              .string()
+              .min(1, { message: "Type column cannot be empty" })
+              .refine((val) => val === "INCOME" || val === "EXPENSE", {
+                message: "Type must be exactly INCOME or EXPENSE",
+              }),
+            categoryName: z.string().optional(),
+          }),
+        )
+        .min(1, "Cannot import an list of transactions with 0 items"),
     }),
   )
   .output(

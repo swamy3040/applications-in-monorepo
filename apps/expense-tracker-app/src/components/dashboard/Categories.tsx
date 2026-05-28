@@ -267,94 +267,97 @@ export function Categories({ setActiveTab }: CategoriesProps) {
       </div>
 
       {/* Data Table */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-slate-800 bg-slate-900/50 hover:bg-transparent">
-              <TableHead className="text-slate-400">Name</TableHead>
-              <TableHead className="text-slate-400">Type</TableHead>
-              <TableHead className="text-slate-400 text-right">
-                Actions
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell
-                  colSpan={3}
-                  className="text-center py-10 text-slate-500"
-                >
-                  <Loader2 className="size-6 animate-spin mx-auto mb-2" />
-                  Loading categories...
-                </TableCell>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/50 overflow-hidden flex flex-col h-[calc(100vh-280px)]">
+        <div className="flex-1 overflow-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-slate-800 bg-slate-900/50 hover:bg-transparent">
+                <TableHead className="text-slate-400">Name</TableHead>
+                <TableHead className="text-slate-400">Type</TableHead>
+                <TableHead className="text-slate-400 text-right">
+                  Actions
+                </TableHead>
               </TableRow>
-            ) : categories?.filter((c) => c.isActive).length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={3}
-                  className="text-center py-10 text-slate-500"
-                >
-                  No categories found. Create one to get started!
-                </TableCell>
-              </TableRow>
-            ) : (
-              (categories ?? [])
-                .filter((item) => item.isActive) // 👈 4. THE FILTER: Hide soft-deleted items!
-                .map((item) => (
-                  <TableRow
-                    key={item.id}
-                    className="border-slate-800 hover:bg-slate-800/40 transition-colors"
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={3}
+                    className="text-center py-10 text-slate-500"
                   >
-                    <TableCell className="font-medium text-slate-200">
-                      {item.name}
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`text-xs px-3 py-1 rounded-full font-bold ${
-                          item.type === "INCOME"
-                            ? "bg-green-500/10 text-green-400"
-                            : "bg-red-500/10 text-red-400"
-                        }`}
-                      >
-                        {item.type}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="hover:bg-slate-800 text-slate-400"
-                          >
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          className="bg-slate-900 border-slate-800 text-white"
+                    <Loader2 className="size-6 animate-spin mx-auto mb-2" />
+                    Loading categories...
+                  </TableCell>
+                </TableRow>
+              ) : categories?.filter((c) => c.isActive).length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={3}
+                    className="text-center py-10 text-slate-500"
+                  >
+                    No categories found. Create one to get started!
+                  </TableCell>
+                </TableRow>
+              ) : (
+                (categories ?? [])
+                  .filter((item) => item.isActive) // 👈 4. THE FILTER: Hide soft-deleted items!
+                  .map((item) => (
+                    <TableRow
+                      key={item.id}
+                      className="border-slate-800 hover:bg-slate-800/40 transition-colors"
+                    >
+                      <TableCell className="font-medium text-slate-200">
+                        {item.name}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`text-xs px-3 py-1 rounded-full font-bold ${
+                            item.type === "INCOME"
+                              ? "bg-green-500/10 text-green-400"
+                              : "bg-red-500/10 text-red-400"
+                          }`}
                         >
-                          <DropdownMenuItem
-                            className="cursor-pointer hover:bg-slate-800"
-                            onClick={() => onEditClick(item)}
+                          {item.type}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="hover:bg-slate-800 text-slate-400"
+                            >
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="end"
+                            className="bg-slate-900 border-slate-800 text-white"
                           >
-                            <Edit className="mr-2 h-4 w-4 text-blue-400" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="cursor-pointer text-red-400 focus:bg-red-950/30 focus:text-red-400"
-                            onClick={() => onDeleteClick(item)} // Pass the whole item now
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-            )}
-          </TableBody>
-        </Table>
+                            <DropdownMenuItem
+                              className="cursor-pointer hover:bg-slate-800"
+                              onClick={() => onEditClick(item)}
+                            >
+                              <Edit className="mr-2 h-4 w-4 text-blue-400" />{" "}
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="cursor-pointer text-red-400 focus:bg-red-950/30 focus:text-red-400"
+                              onClick={() => onDeleteClick(item)} // Pass the whole item now
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {/* 👇 5. THE NUCLEAR MODAL 👇 */}
